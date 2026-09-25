@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Friday Challenge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Graduate&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --house:#1E5B3C; --house-deep:#123826; --gold:#D9A23A; --gold-soft:#F3DFB2;
+  --paper:#F6F6F2; --card:#FFFFFF; --ink:#1B1D25; --slate:#5B6070; --line:#DCDBD4;
+  --up:#2E8A6E; --down:#A8452F; --field:#FFFFFF;
+  --display:"Graduate", Georgia, "Times New Roman", serif;
+  --body:"Barlow", "Segoe UI", system-ui, sans-serif;
+  --num:"Barlow Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#17181D; --card:#212229; --ink:#EEEDE8; --slate:#A3A6B2; --line:#34353E;
+    --house:#4FA374; --house-deep:#123826; --gold-soft:#4A3B1B; --up:#5FBF82; --down:#E08469; --field:#2A2B33;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#17181D; --card:#212229; --ink:#EEEDE8; --slate:#A3A6B2; --line:#34353E;
+  --house:#4FA374; --house-deep:#123826; --gold-soft:#4A3B1B; --up:#5FBF82; --down:#E08469; --field:#2A2B33;
+}
+*,*::before,*::after{box-sizing:inherit}
+[hidden]{display:none !important}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.wrap{max-width:1080px;margin:0 auto;padding:20px 20px 60px}
+
+/* Header */
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;border-bottom:4px solid var(--house);padding-bottom:14px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(28px,5vw,46px);line-height:1;margin:0;color:var(--house);letter-spacing:.01em}
+.sub{color:var(--slate);margin-top:6px}
+.weeknav{display:flex;align-items:center;gap:6px}
+.weeknav button{border:1px solid var(--line);background:var(--card);border-radius:8px;width:38px;height:38px;font-size:18px}
+.weeknav .lbl{min-width:170px;text-align:center;font-weight:600}
+.weeknav .lbl small{display:block;font-weight:400;color:var(--slate);font-size:13px}
+
+nav.tabs{display:flex;gap:4px;margin:18px 0 22px;flex-wrap:wrap}
+nav.tabs button{border:0;background:transparent;padding:9px 16px;border-radius:999px;font-weight:600;color:var(--slate)}
+nav.tabs button[aria-selected="true"]{background:var(--house);color:#fff}
+nav.tabs .spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--card);padding:9px 16px;border-radius:10px;font-weight:600}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#241a06}
+.status{font-size:13px;color:var(--slate);margin-left:8px;align-self:center}
+
+/* Standings */
+.board{display:grid;gap:10px}
+.row{display:grid;grid-template-columns:64px 1fr auto;gap:18px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px}
+.row.first{border-color:var(--gold);box-shadow:inset 6px 0 0 var(--gold)}
+.rank{font-family:var(--display);font-size:44px;line-height:1;text-align:center;color:var(--house)}
+.row.first .rank{color:var(--gold)}
+.cname{font-weight:700;font-size:20px}
+.bar{height:10px;background:var(--line);border-radius:6px;margin:8px 0 8px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--house);border-radius:6px;transition:width .6s ease}
+.row.first .bar>i{background:var(--gold)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--slate);white-space:nowrap}
+.chip.top{border-color:var(--gold);background:var(--gold-soft);color:var(--ink)}
+.pts{text-align:right}
+.pts b{font-family:var(--num);font-size:40px;line-height:1;font-weight:700}
+.pts small{display:block;color:var(--slate);font-size:13px}
+.note{color:var(--slate);font-size:14px;margin:14px 2px 0}
+
+.iep{margin-top:26px;background:var(--card);border:1px dashed var(--house);border-radius:14px;padding:16px 18px}
+.iep h3{margin:0 0 4px;font-size:18px}
+.iep .grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.iep .cat{border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:14px}
+.iep .cat.up{border-color:var(--up);color:var(--up)} .iep .cat.down{color:var(--down)}
+
+/* Entry */
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+table.entry{border-collapse:collapse;width:100%;min-width:760px}
+.entry th,.entry td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+.entry thead th{font-weight:700;background:var(--card);position:sticky;top:0}
+.entry tbody tr:last-child td,.entry tbody tr:last-child th{border-bottom:0}
+.entry th[scope=row]{font-weight:600;min-width:210px}
+.entry th[scope=row] small{display:block;font-weight:400;color:var(--slate);font-size:13px}
+.entry input[type=number]{width:84px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
+.days{display:flex;gap:3px}
+.day{width:30px;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--field);font-size:12px;font-weight:700;color:var(--slate);padding:0}
+.day[data-v="y"]{background:var(--up);border-color:var(--up);color:#fff}
+.day[data-v="n"]{background:var(--down);border-color:var(--down);color:#fff}
+.hint{color:var(--slate);font-size:14px;margin:12px 2px}
+
+.warnnote{color:var(--down);font-size:14px;font-weight:600}
+.sizechoice .muted{color:var(--ink)}
+.sizechoice{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-2px 0 12px;padding:10px 12px;border:1px solid var(--gold);border-radius:10px;background:var(--gold-soft)}
+.linkbtn{border:0;background:transparent;color:var(--house);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.ownw{font-size:14px;color:var(--slate);margin-top:2px}
+.ownlbl{display:flex;align-items:center;gap:8px;font-weight:600;margin:0 0 14px}
+.importmsg{font-weight:600;color:var(--house)}
+.nudge{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 12px;padding:10px 14px;border:1px solid var(--gold);border-radius:10px;background:var(--gold-soft);color:var(--ink)}
+.pastewrap{display:flex;align-items:center;gap:8px;margin-top:6px}
+.pastebtn{border:0;background:transparent;color:var(--house);font-weight:600;font-size:14px;padding:2px 0;text-decoration:underline;text-underline-offset:3px}
+#pasteDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);width:min(520px,92vw);padding:20px}
+#pasteDlg::backdrop{background:rgba(8,24,16,.5)}
+#pasteDlg h3{margin:0 0 12px}
+#pasteDlg textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--field);font-family:var(--num);font-size:17px;resize:vertical}
+.outof{display:flex;align-items:center;gap:10px;margin-top:10px;font-weight:600}
+.outof input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field);font-weight:400}
+.dlgbtns{display:flex;justify-content:flex-end;gap:8px}
+
+/* Chart */
+:root{--s1:#1E5B3C;--s2:#C98A1B;--s3:#3F6FB0;--s4:#A8452F;--s5:#7B5AA6;--c-grid:var(--line);--c-text:var(--slate);--c-sel:var(--house);--c-faint:#A9AFA9}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--s1:#5FBF82;--s2:#E6B24C;--s3:#79A6E6;--s4:#E08469;--s5:#B596E0;--c-faint:#5C615C} }
+:root[data-theme="dark"]{--s1:#5FBF82;--s2:#E6B24C;--s3:#79A6E6;--s4:#E08469;--s5:#B596E0;--c-faint:#5C615C}
+.ctrls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card)}
+.seg button{border:0;background:transparent;padding:8px 14px;font-weight:600;color:var(--slate)}
+.seg button[aria-pressed="true"]{background:var(--house);color:#fff}
+.ctrls select{padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.ctrls label{display:flex;gap:6px;align-items:center;color:var(--slate);font-size:15px}
+.chartbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 12px 6px;overflow-x:auto}
+.chartbox svg{display:block;width:100%;min-width:560px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin:10px 4px 4px;font-size:14px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:4px;border-radius:2px;display:inline-block}
+.callout{display:flex;align-items:baseline;gap:14px;margin:16px 2px 4px}
+.callout b{font-family:var(--num);font-size:48px;line-height:1;color:var(--house)}
+.callout b.neg{color:var(--down)}
+.callout span{font-size:18px}
+.changes{display:grid;gap:4px;margin:14px 2px 0;font-size:15px}
+.namebar{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.namebar label{display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:14px;flex:1;min-width:200px}
+.namebar input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field);font-weight:400;font-size:16px}
+#show{--c-grid:rgba(255,255,255,.18);--c-text:rgba(255,255,255,.8);--c-sel:#D9A23A;--c-faint:rgba(255,255,255,.3);--s1:#8FE0AE;--s2:#F2C45C;--s3:#9CC3FF;--s4:#FF9E85;--s5:#D3B8FF}
+#show .ctrls{margin:0 0 2vh}
+#show .seg{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2)}
+#show .seg button{color:rgba(255,255,255,.8)}
+#show .seg button[aria-pressed="true"]{background:var(--gold);color:#241a06}
+#show .ctrls select{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.25)}
+#show .ctrls select option{color:#000}
+#show .ctrls label{color:rgba(255,255,255,.85)}
+#show .chartbox{background:transparent;border:0;padding:0}
+#show .callout b{color:var(--gold);font-size:clamp(48px,7vw,110px)}
+#show .callout b.neg{color:#FFB3A0}
+#show .callout span{font-size:clamp(18px,2.4vw,34px)}
+#show .changes{font-size:clamp(16px,1.8vw,26px)}
+#show .legend{font-size:clamp(14px,1.5vw,22px)}
+
+/* Settings */
+.set{display:grid;gap:22px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.panel h3{margin:0 0 12px;font-size:18px}
+.crow{display:grid;grid-template-columns:1fr 110px 110px;gap:10px;align-items:center;margin-bottom:8px}
+.crow input[type=text],.crow input[type=number],.panel input[type=text],.panel input[type=date]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
+.wrow{display:grid;grid-template-columns:170px 1fr 56px;gap:12px;align-items:center;margin-bottom:10px}
+.wrow input[type=range]{width:100%;accent-color:var(--house)}
+.wrow output{font-family:var(--num);font-size:20px;font-weight:700;text-align:right}
+.total{font-weight:600}
+.total.bad{color:var(--down)}
+.muted{color:var(--slate);font-size:14px}
+
+/* Projector scoreboard */
+#show{position:fixed;inset:0;background:var(--house-deep);color:#fff;z-index:50;display:none;padding:calc(env(safe-area-inset-top,0px) + 3vh) 5vw calc(env(safe-area-inset-bottom,0px) + 3vh);overflow:auto}
+#show.on{display:block}
+#show h2{font-family:var(--display);font-weight:400;font-size:clamp(34px,6vw,84px);margin:0;color:var(--gold);line-height:1}
+#show .wk{font-size:clamp(16px,2vw,26px);opacity:.85;margin:.4em 0 3vh}
+.srow{display:grid;grid-template-columns:clamp(60px,9vw,140px) 1fr auto;gap:3vw;align-items:center;padding:2vh 0;border-top:2px solid rgba(255,255,255,.18)}
+.srow .r{font-family:var(--display);font-size:clamp(44px,8vw,120px);line-height:1;color:rgba(255,255,255,.7)}
+.srow.first .r{color:var(--gold)}
+.srow .n{font-size:clamp(24px,4vw,58px);font-weight:700;line-height:1.05}
+.srow .t{font-size:clamp(14px,1.7vw,22px);opacity:.8;margin-top:.3em}
+.srow .p{font-family:var(--num);font-weight:700;font-size:clamp(40px,7vw,104px);line-height:1}
+#show .close{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);right:18px;background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:10px;padding:8px 14px}
+#show .iepline{margin-top:3vh;font-size:clamp(16px,2vw,28px);color:var(--gold-soft)}
+@media (prefers-color-scheme: dark){ #show .iepline{color:#F3DFB2} }
+
+@media (max-width:640px){
+  .row{grid-template-columns:44px 1fr;gap:12px}
+  .rank{font-size:32px}
+  .pts{grid-column:2;text-align:left}
+  .pts b{font-size:30px}
+  .crow{grid-template-columns:1fr 80px 70px}
+  .wrow{grid-template-columns:1fr 50px}
+  .wrow input[type=range]{grid-column:1 / -1;grid-row:2}
+}
+@media (prefers-reduced-motion: reduce){ .bar>i{transition:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>The Friday Challenge</h1>
+      <div class="sub" id="seasonLine">Mr. Johnson's classes</div>
+    </div>
+    <div class="weeknav" aria-label="Choose week">
+      <button id="prevWk" aria-label="Previous week">‹</button>
+      <div class="lbl" id="wkLabel"></div>
+      <button id="nextWk" aria-label="Next week">›</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="standings" aria-selected="true">Standings</button>
+    <button role="tab" data-tab="trends" aria-selected="false">Class scores</button>
+    <button role="tab" data-tab="entry" aria-selected="false">Enter scores</button>
+    <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
+    <span class="spacer"></span>
+    <span class="status" id="saveStatus"></span>
+    <button class="btn primary" id="showBtn">Show on projector</button>
+  </nav>
+
+  <section id="tab-standings"></section>
+  <section id="tab-trends" hidden></section>
+  <section id="tab-entry" hidden></section>
+  <section id="tab-settings" hidden></section>
+</div>
+
+<dialog id="pasteDlg">
+  <h3></h3>
+  <textarea rows="10" aria-label="Pasted scores" placeholder="Paste scores here, one per line"></textarea>
+  <label class="outof">Points possible <input type="number" min="1" step="any" placeholder="Leave blank if scores are percents"></label>
+  <p class="result muted"></p>
+  <div class="dlgbtns"><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn primary use" type="button">Use this average</button></div>
+</dialog>
+
+<div id="show" role="dialog" aria-label="Projector scoreboard">
+  <button class="close" id="closeShow">Close</button>
+  <div id="showBody"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const CATS = [
+  {key:"quiz", label:"Quiz growth", short:"Quiz", dir:1},
+  {key:"hw", label:"Homework turned in", short:"Homework", dir:1},
+  {key:"behavior", label:"Behavior", short:"Behavior", dir:1},
+  {key:"house", label:"House points", short:"House pts", dir:1},
+  {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
+  {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
+];
+const DAYS = ["M","T","W","Th","F"];
+// A class at one of these levels can't really improve, so it ties for first in that category.
+const PERFECT = {
+  hw: v=>v>=95,
+  behavior: v=>v>=1,
+  attendance: v=>v<=0,
+  tardy: v=>v<=0
+};
+
+function mondayOf(d){
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dow = (x.getDay()+6)%7; x.setDate(x.getDate()-dow); return x;
+}
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function parseIso(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
+function addWeeks(s,n){ const d=parseIso(s); d.setDate(d.getDate()+7*n); return iso(d); }
+function fmtWeek(s){ const d=parseIso(s); return "Week of "+d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
+
+const DEFAULT_CONFIG = {
+  classes:[
+    {id:"c1",name:"Period 1",size:28,iep:false},
+    {id:"c2",name:"Period 2",size:28,iep:false},
+    {id:"c3",name:"Period 3",size:28,iep:false},
+    {id:"c4",name:"Period 4",size:28,iep:false},
+    {id:"c5",name:"Period 5",size:14,iep:true}
+  ],
+  weights:{quiz:34,hw:18,behavior:13,house:20,attendance:9,tardy:6},
+  season:{name:"Quarter 1", start:"2026-08-17"},
+  pastSeasons:[]
+};
+
+let config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+let weeks = {};        // weekId -> {entries:{cid:{...}}}
+let current = iso(mondayOf(new Date()));
+let db = null;
+let readOnly = false;
+
+/* ---------- storage ---------- */
+function localLoad(){
+  try{
+    const c = localStorage.getItem("fc-config"); if(c) config = JSON.parse(c);
+    const w = localStorage.getItem("fc-weeks"); if(w) weeks = JSON.parse(w);
+  }catch(e){}
+}
+function localSave(){
+  try{ localStorage.setItem("fc-config",JSON.stringify(config)); localStorage.setItem("fc-weeks",JSON.stringify(weeks)); }catch(e){}
+}
+const statusEl = document.getElementById("saveStatus");
+function setStatus(t){ statusEl.textContent = t; }
+
+// one write at a time per document, coalesced
+const pending = {}; const inflight = {};
+function queueWrite(path, getBody){
+  pending[path] = getBody;
+  clearTimeout(queueWrite["t"+path]);
+  queueWrite["t"+path] = setTimeout(()=>flush(path), 600);
+  setStatus("Saving…");
+}
+async function flush(path){
+  if(inflight[path] || !pending[path]) return;
+  const body = pending[path](); delete pending[path];
+  if(!db){ localSave(); setStatus("Saved on this computer"); return; }
+  inflight[path] = true;
+  try{
+    await db.doc(path).set(JSON.parse(JSON.stringify(body)));
+    setStatus("Saved");
+  }catch(e){
+    if(e && e.code==="invalid_argument"){ readOnly = true; setStatus("View only"); render(); }
+    else {
+      // keep the unsaved version (unless something newer is already waiting) and try again shortly
+      if(!pending[path]) pending[path] = ()=>body;
+      setStatus(e && e.code==="unavailable" ? "Reconnecting…" : "Couldn't save yet. Retrying…");
+      clearTimeout(queueWrite["t"+path]);
+      queueWrite["t"+path] = setTimeout(()=>flush(path), 2000+Math.random()*1500);
+      inflight[path] = false; return;
+    }
+  }finally{
+    inflight[path] = false;
+  }
+  if(pending[path]) flush(path);
+}
+function saveConfig(){ localSave(); queueWrite("config/main", ()=>config); }
+function saveWeek(id){ localSave(); queueWrite("weeks/"+id, ()=>weeks[id]); }
+
+/* ---------- metrics ---------- */
+const comp = ()=>config.classes.filter(c=>!c.iep);
+// Each class can have its own weights; otherwise it uses the default set.
+function weightsFor(cid){ return (config.classWeights && config.classWeights[cid]) || config.weights; }
+function wOf(cid, key){ return Number(weightsFor(cid)[key])||0; }
+function hasOwnWeights(cid){ return !!(config.classWeights && config.classWeights[cid]); }
+const thisMonday = ()=>iso(mondayOf(new Date()));
+// Class size can change mid-year; a change "from this week on" leaves earlier weeks' math alone.
+function sizeFor(cls, wk){
+  let sz = Number(cls.size)||1;
+  (cls.sizeChanges||[]).slice().sort((a,b)=>a.from<b.from?-1:1).forEach(ch=>{ if(wk>=ch.from) sz = Number(ch.size)||sz; });
+  return Math.max(1, sz);
+}
+const iepClasses = ()=>config.classes.filter(c=>c.iep);
+function entry(wk,cid){ return (weeks[wk] && weeks[wk].entries && weeks[wk].entries[cid]) || {}; }
+function num(v){ return (v===""||v===null||v===undefined||isNaN(Number(v))) ? null : Number(v); }
+
+function metric(wk, cls, key){
+  const e = entry(wk, cls.id); const size = sizeFor(cls, wk);
+  switch(key){
+    case "quiz": return quizAvg(wk, cls);
+    case "hw": return num(e.hw);
+    case "behavior": {
+      const d = e.days || []; const y = d.filter(v=>v==="y").length, n = d.filter(v=>v==="n").length;
+      return (y+n)===0 ? null : y/(y+n);
+    }
+    case "house": { const v=num(e.house); return v===null?null:v/size; }
+    case "attendance": { const v=num(e.abs); return v===null?null:v/size; }
+    case "tardy": { const v=num(e.tardy); return v===null?null:v/size; }
+  }
+  return null;
+}
+// Pasted scores: students with no score count as zero, so the average is over the whole class.
+function quizInfo(wk, cls){
+  const e = entry(wk, cls.id); const q = num(e.quiz); if(q===null) return null;
+  const n = num(e.quizN); if(!n) return {avg:q, manual:true};
+  const size = sizeFor(cls, wk);
+  const sum = num(e.quizSum)!==null ? e.quizSum : q*n;
+  return {avg: sum/Math.max(n,size), n, size, missing: Math.max(0,size-n), over: n>size};
+}
+function quizAvg(wk, cls){ const i = quizInfo(wk, cls); return i ? i.avg : null; }
+function priorWeeks(wk){ return Object.keys(weeks).filter(w=>w<wk).sort(); }
+function priorAvg(wk, cls, key, max){
+  const vals = priorWeeks(wk).map(w=>metric(w,cls,key)).filter(v=>v!==null);
+  const use = max ? vals.slice(-max) : vals;
+  return use.length ? use.reduce((a,b)=>a+b,0)/use.length : null;
+}
+
+// rank competitive classes for one week
+function weekResult(wk){
+  const cs = comp(); const n = cs.length;
+  const out = {cats:{}, score:{}, included:[]};
+  cs.forEach(c=>out.score[c.id]=null);
+  if(n<2) return out;
+  const wsum = {}; const totals = {}; cs.forEach(c=>{ totals[c.id]=0; wsum[c.id]=0; });
+  CATS.forEach(cat=>{
+    let vals = cs.map(c=>metric(wk,c,cat.key));
+    if(vals.some(v=>v===null)) { out.cats[cat.key]=null; return; }
+    let mode = "raw";
+    const perfect = {};
+    const test = PERFECT[cat.key];
+    cs.forEach((c,i)=>{ if(test && test(vals[i])) perfect[c.id]=true; });
+    const priors = cs.map(c=>priorAvg(wk,c,cat.key,4));
+    if(priors.every(p=>p!==null)){ vals = vals.map((v,i)=>v-priors[i]); mode="growth"; }
+    // average ranks for ties; perfect classes tie for first
+    const order = cs.map((c,i)=>({c,v: perfect[c.id] ? Infinity : vals[i]*cat.dir})).sort((a,b)=>(a.v===b.v)?0:(b.v>a.v?1:-1));
+    const pts = {}; const place = {};
+    let i=0;
+    while(i<order.length){
+      let j=i; while(j+1<order.length && (order[j+1].v===order[i].v || Math.abs(order[j+1].v-order[i].v)<1e-9)) j++;
+      const avgRank = (i+j)/2; // 0-based
+      for(let k=i;k<=j;k++){ pts[order[k].c.id] = n-avgRank; place[order[k].c.id]=i+1; }
+      i=j+1;
+    }
+    out.cats[cat.key] = {pts, place, mode, perfect};
+    cs.forEach(c=>{ const w = wOf(c.id, cat.key); if(w>0){ wsum[c.id]+=w; totals[c.id]+=w*pts[c.id]; } });
+  });
+  cs.forEach(c=>{ if(wsum[c.id]>0) out.score[c.id]=totals[c.id]/wsum[c.id]; });
+  return out;
+}
+// Every season in order, each running until the next one starts.
+function allSeasons(){
+  const list = (config.pastSeasons||[]).filter(p=>p.start).slice().sort((a,b)=>a.start<b.start?-1:1)
+    .concat([{name:config.season.name, start:config.season.start}]);
+  return list.map((x,i)=>({name:x.name, start:x.start, next: list[i+1] ? list[i+1].start : null}));
+}
+function seasonFor(wk){
+  const L = allSeasons(); let found = L[0];
+  L.forEach(x=>{ if(wk>=x.start) found = x; });
+  return found;
+}
+function seasonWeeks(upTo){
+  const end = upTo || current; const sn = seasonFor(end);
+  return Object.keys(weeks).filter(w=>w>=sn.start && w<=end && (!sn.next || w<sn.next)).sort();
+}
+function seasonTotals(upTo){
+  const t = {}; comp().forEach(c=>t[c.id]=0);
+  seasonWeeks(upTo).forEach(w=>{ const r=weekResult(w); comp().forEach(c=>{ if(r.score[c.id]!==null) t[c.id]+=r.score[c.id]; }); });
+  return t;
+}
+function iepWeek(wk, cls){
+  let wsum=0, won=0; const cats={};
+  CATS.forEach(cat=>{
+    const w = wOf(cls.id, cat.key); const v = metric(wk,cls,cat.key);
+    const p = priorAvg(wk,cls,cat.key,4);
+    if(v===null || p===null){ cats[cat.key]=null; return; }
+    const better = cat.dir*(v-p) >= -1e-9; cats[cat.key]=better;
+    if(w>0){ wsum+=w; if(better) won+=w; }
+  });
+  return {pct: wsum? won/wsum : null, cats};
+}
+function fmtPts(v){ return v===null||v===undefined ? "–" : (Math.round(v*10)/10).toFixed(1); }
+function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+
+/* ---------- rendering ---------- */
+function el(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  if(attrs) for(const k in attrs){
+    if(k==="class") e.className=attrs[k];
+    else if(k==="text") e.textContent=attrs[k];
+    else if(k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  kids.flat().forEach(k=>{ if(k!==null&&k!==undefined) e.append(k.nodeType?k:document.createTextNode(k)); });
+  return e;
+}
+function sortedStandings(){
+  const totals = seasonTotals(); const wr = weekResult(current);
+  return comp().map(c=>({c, total:totals[c.id], week:wr.score[c.id], wr}))
+    .sort((a,b)=>b.total-a.total || (b.week||0)-(a.week||0));
+}
+
+function renderHeader(){
+  document.getElementById("wkLabel").replaceChildren(fmtWeek(current), el("small",{text: current===iso(mondayOf(new Date())) ? "This week" : (current>iso(mondayOf(new Date()))?"Upcoming":"Past week")}));
+  document.getElementById("seasonLine").textContent = "Mr. Johnson's classes, " + seasonFor(current).name + " season";
+}
+
+function renderStandings(){
+  const root = document.getElementById("tab-standings"); root.replaceChildren();
+  const rows = sortedStandings(); const max = Math.max(1e-9, ...rows.map(r=>r.total));
+  const wr = weekResult(current);
+  const board = el("div",{class:"board"});
+  let prevTotal = null, place = 0;
+  rows.forEach((r,i)=>{
+    if(prevTotal===null || Math.abs(r.total-prevTotal)>1e-9) place=i+1; prevTotal=r.total;
+    const chips = CATS.filter(cat=>wr.cats[cat.key] && wOf(r.c.id, cat.key)>0).map(cat=>{
+      const pl = wr.cats[cat.key].place[r.c.id];
+      const pf = wr.cats[cat.key].perfect[r.c.id];
+      return el("span",{class:"chip"+(pl===1?" top":""), text: cat.short+" "+ordinal(pl)+(pf?", perfect":"")});
+    });
+    board.append(el("div",{class:"row"+(place===1&&r.total>0?" first":"")},
+      el("div",{class:"rank", text:String(place)}),
+      el("div",null,
+        el("div",{class:"cname", text:r.c.name}),
+        hasOwnWeights(r.c.id) ? el("div",{class:"ownw", text:"Scored mostly on "+CATS.filter(c=>wOf(r.c.id,c.key)>0).sort((a,b)=>wOf(r.c.id,b.key)-wOf(r.c.id,a.key)).slice(0,3).map(c=>c.short.toLowerCase()+" ("+wOf(r.c.id,c.key)+"%)").join(", ")}) : null,
+        el("div",{class:"bar"}, el("i",{style:"width:"+Math.max(2,(r.total/max)*100)+"%"})),
+        el("div",{class:"chips"}, chips.length?chips:[el("span",{class:"chip",text:"No full categories yet this week"})])
+      ),
+      el("div",{class:"pts"}, el("b",{text:fmtPts(r.total)}), el("small",{text:"season points"}), el("small",{text:"This week: "+fmtPts(r.week)}))
+    ));
+  });
+  const lb = lastBackup();
+  if(Object.keys(weeks).length && (!lb || (Date.now()-lb.getTime()) > 7*864e5)){
+    const b = el("button",{class:"linkbtn",type:"button",text:"Download a backup"}); b.addEventListener("click",downloadBackup);
+    root.append(el("div",{class:"nudge"}, el("span",{text: lb ? "It's been over a week since your last backup. " : "Your scores live only in this browser. "}), b));
+  }
+  root.append(board);
+
+  const waiting = CATS.filter(cat=>!wr.cats[cat.key] && comp().some(c=>wOf(c.id, cat.key)>0)).map(c=>c.short.toLowerCase());
+  root.append(el("p",{class:"note", text: waiting.length
+    ? "This week so far. Still waiting on: "+waiting.join(", ")+". A category counts once every class has a number in it."
+    : "All categories are in for this week."}));
+  const rawCats = CATS.filter(c=>wr.cats[c.key] && wr.cats[c.key].mode==="raw").map(c=>c.short.toLowerCase());
+  const growCats = CATS.filter(c=>wr.cats[c.key] && wr.cats[c.key].mode==="growth");
+  if(growCats.length) root.append(el("p",{class:"note",text:"Every category is ranked on growth: how much each class improved on its own average from the last four weeks. A class at a perfect level (95% or more homework, every behavior day earned, no unexcused absences, or no tardies) ties for first in that category."}));
+  if(rawCats.length) root.append(el("p",{class:"note",text:"Ranked on this week's raw numbers for now: "+rawCats.join(", ")+". At least one class has no earlier week to compare against yet, so growth scoring for these starts next week."}));
+
+  iepClasses().forEach(cls=>{
+    const r = iepWeek(current, cls);
+    const seasonWins = seasonWeeks().filter(w=>{ const x=iepWeek(w,cls); return x.pct!==null && x.pct>=0.5; }).length;
+    const cats = CATS.filter(c=>r.cats[c.key]!==null && r.cats[c.key]!==undefined).map(c=>
+      el("span",{class:"cat "+(r.cats[c.key]?"up":"down"), text:(r.cats[c.key]?"▲ ":"▼ ")+c.short}));
+    root.append(el("div",{class:"iep"},
+      el("h3",{text: cls.name+": Personal best track"}),
+      el("div",{class:"muted", text: r.pct===null
+        ? "Building a baseline. This class competes against its own past weeks, so it needs at least one earlier week of numbers."
+        : "Beat or matched their own average on "+Math.round(r.pct*100)+"% of the weighted categories this week. Personal-best weeks this season: "+seasonWins+"."}),
+      cats.length? el("div",{class:"grid"}, cats) : null
+    ));
+  });
+}
+
+function renderEntry(){
+  const root = document.getElementById("tab-entry"); root.replaceChildren();
+  const cs = config.classes;
+  if(!weeks[current]) weeks[current] = {entries:{}};
+  const wid = current;
+  // Always edit the live copy: synced updates replace the week object, so never hold on to an old one.
+  const W = ()=>{ if(!weeks[wid]) weeks[wid] = {entries:{}}; if(!weeks[wid].entries) weeks[wid].entries = {}; return weeks[wid]; };
+  const wk = W();
+  const setVal = (cid, field, v)=>{ const w=W(); w.entries[cid] = Object.assign({}, w.entries[cid]||{}); w.entries[cid][field]=v; saveWeek(wid); renderStandings(); renderTrends(); };
+
+  const numCell = (cid, field, ph, maxv)=>{
+    const v = (wk.entries[cid]||{})[field];
+    const inp = el("input",{type:"number", min:"0", step:"any", inputmode:"decimal", placeholder:ph, "aria-label":field});
+    if(maxv) inp.setAttribute("max",maxv);
+    if(v!==undefined && v!==null) inp.value = v;
+    if(readOnly) inp.disabled = true;
+    inp.addEventListener("input",()=>setVal(cid, field, inp.value===""?null:Number(inp.value)));
+    return el("td",null,inp);
+  };
+  const dayCell = (cid)=>{
+    const d = ((wk.entries[cid]||{}).days || [null,null,null,null,null]).slice();
+    const box = el("div",{class:"days"});
+    DAYS.forEach((lbl,i)=>{
+      const b = el("button",{class:"day", type:"button", "data-v": d[i]||"", "aria-label": lbl+" behavior: "+(d[i]==="y"?"earned":d[i]==="n"?"missed":"not marked"), text:lbl});
+      if(readOnly) b.disabled = true;
+      b.addEventListener("click",()=>{
+        d[i] = d[i]===null||d[i]===undefined||d[i]==="" ? "y" : d[i]==="y" ? "n" : null;
+        b.dataset.v = d[i]||""; b.setAttribute("aria-label", lbl+" behavior: "+(d[i]==="y"?"earned":d[i]==="n"?"missed":"not marked"));
+        setVal(cid,"days",d.slice());
+      });
+      box.append(b);
+    });
+    return el("td",null,box);
+  };
+
+  const rows = [
+    ["Quiz average (%)","Paste every score from your gradebook. Students without a score count as zero.", cid=>{
+      const cls = config.classes.find(c=>c.id===cid); const info = quizInfo(wid, cls);
+      const inp = el("input",{type:"number", min:"0", max:"100", step:"any", inputmode:"decimal", placeholder:"0–100", "aria-label":"Quiz average"});
+      if(info) inp.value = Math.round(info.avg*10)/10;
+      if(readOnly) inp.disabled = true;
+      inp.addEventListener("input",()=>{ const w=W(); const e=Object.assign({}, w.entries[cid]||{}); e.quiz = inp.value===""?null:Number(inp.value); delete e.quizN; delete e.quizSum; w.entries[cid]=e; saveWeek(wid); renderStandings(); renderTrends(); });
+      const b=el("button",{class:"pastebtn",type:"button",text:"Paste scores"}); if(readOnly) b.disabled=true;
+      b.addEventListener("click",()=>openPaste(cid));
+      let noteTxt = null, warn = false;
+      if(info && !info.manual){ noteTxt = info.over ? info.n+" scores, but class size is "+info.size+". Update it in Settings." : info.missing ? info.n+" of "+info.size+" scored, "+info.missing+" counted as zero" : "All "+info.n+" scored"; warn = info.over; }
+      return el("td",null, inp, el("div",{class:"pastewrap"}, b), noteTxt? el("small",{class:warn?"warnnote":"muted",style:"display:block;max-width:150px",text:noteTxt}):null); }],
+    ["Homework turned in (%)","Share of students with all weekly work in", cid=>numCell(cid,"hw","0–100","100")],
+    ["Behavior","Tap once for earned, twice for missed", dayCell],
+    ["House points","Total earned by students in this class", cid=>numCell(cid,"house","total")],
+    ["Unexcused absences","Enter last week's count, once the office has processed notes", cid=>numCell(cid,"abs","count")],
+    ["Tardies","Total for the week", cid=>numCell(cid,"tardy","count")]
+  ];
+  const table = el("table",{class:"entry"},
+    el("thead",null, el("tr",null, el("th",{text:""}), cs.map(c=>el("th",{text:c.name+(c.iep?" (personal best)":"")})))),
+    el("tbody",null, rows.map(([t,s,fn])=>el("tr",null, el("th",{scope:"row"}, t, el("small",{text:s})), cs.map(c=>fn(c.id)))))
+  );
+  const nameIn = (field, label, ph)=>{
+    const i = el("input",{type:"text", placeholder:ph, maxlength:"60", autocomplete:"off", autocapitalize:"sentences", spellcheck:"true"}); i.value = wk[field]||""; if(readOnly) i.disabled=true;
+    i.addEventListener("input",()=>{ W()[field] = i.value; saveWeek(wid); renderTrends(); });
+    i.addEventListener("change",()=>{ const t=i.value.replace(/\s+/g," ").trim(); if(t!==i.value){ i.value=t; W()[field]=t; saveWeek(wid); renderTrends(); } });
+    return el("label",null, label, i);
+  };
+  root.append(el("div",{class:"namebar"}, nameIn("quizName","This week's quiz name","e.g. Quiz 3: Figurative language"), nameIn("hwName","This week's homework name","e.g. Unit 2 reading packet")));
+  root.append(el("div",{class:"scroll"},table));
+  root.append(el("p",{class:"hint",text:"Everything saves as you type. To paste quiz scores, copy the score column from your Google Sheet and click Paste scores under that class. The app averages them over the whole class, so anyone without a score counts as zero until you paste again after makeups. Fill in behavior, house points, and tardies during the week and the standings update live; the quiz and homework numbers usually land on Friday."}));
+}
+
+function parseScores(text, outOf){
+  const tokens = text.split(/[\t\r\n,;]+/).map(t=>t.trim()).filter(t=>t!=="");
+  const scores = []; let skipped = 0; let big = false;
+  tokens.forEach(t=>{
+    let v = null;
+    const frac = t.match(/^(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+    if(frac && Number(frac[2])>0) v = Number(frac[1])/Number(frac[2])*100;
+    else { const n = t.replace(/%$/,""); if(/^-?\d+(\.\d+)?$/.test(n)){ v = Number(n); if(outOf>0 && !t.endsWith("%")) v = v/outOf*100; } }
+    if(v===null || !isFinite(v)) { skipped++; return; }
+    if(v>100) big = true;
+    scores.push(v);
+  });
+  const avg = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : null;
+  return {scores, skipped, big, avg};
+}
+function openPaste(cid){
+  const cls = config.classes.find(c=>c.id===cid);
+  const dlg = document.getElementById("pasteDlg");
+  const ta = dlg.querySelector("textarea"), outOf = dlg.querySelector("input"), res = dlg.querySelector(".result"), use = dlg.querySelector(".use");
+  dlg.querySelector("h3").textContent = "Paste quiz scores for "+cls.name;
+  ta.value = ""; outOf.value = config.lastOutOf||""; use.disabled = true;
+  let parsed = null;
+  const upd = ()=>{
+    parsed = parseScores(ta.value, Number(outOf.value)||0);
+    if(!parsed.scores.length){ res.textContent = "Copy the score column from your Google Sheet and paste it here. Blank cells and words like ABS are skipped."; use.disabled = true; return; }
+    const size = sizeFor(cls, current);
+    const n = parsed.scores.length, eff = parsed.scores.reduce((a,b)=>a+b,0)/Math.max(n,size);
+    let msg = n+" scores found for a class of "+size+". ";
+    if(n<size) msg += (size-n)+" missing count as zero. ";
+    if(n>size) msg += "That's more scores than students, so check the class size in Settings or make sure you copied the right column. ";
+    msg += "Class average: "+(Math.round(eff*10)/10)+"%.";
+    if(parsed.skipped) msg += " Skipped "+parsed.skipped+" blank or non-number cell"+(parsed.skipped>1?"s":"")+".";
+    if(parsed.big) msg += " Some scores are over 100. If these are raw points, fill in \u201cpoints possible.\u201d";
+    res.textContent = msg; use.disabled = false;
+  };
+  ta.oninput = upd; outOf.oninput = upd; upd();
+  use.onclick = ()=>{
+    if(!parsed || !parsed.scores.length) return;
+    if(!weeks[current]) weeks[current] = {entries:{}}; const wk = weeks[current]; if(!wk.entries) wk.entries = {}; wk.entries[cid] = Object.assign({}, wk.entries[cid]||{});
+    wk.entries[cid].quiz = Math.round(parsed.avg*10)/10; wk.entries[cid].quizN = parsed.scores.length; wk.entries[cid].quizSum = parsed.scores.reduce((a,b)=>a+b,0);
+    if((Number(outOf.value)||0) !== (config.lastOutOf||0)){ config.lastOutOf = Number(outOf.value)||0; saveConfig(); }
+    saveWeek(current); dlg.close(); renderEntry(); renderStandings(); renderTrends();
+  };
+  dlg.showModal(); ta.focus();
+}
+
+let importMsg = "";
+function lastBackup(){ try{ const v=localStorage.getItem("fc-lastBackup"); return v? new Date(v) : null; }catch(e){ return null; } }
+function downloadBackup(){
+  const data = {app:"friday-challenge", version:1, exported:new Date().toISOString(), config, weeks};
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "friday-challenge-backup-"+iso(new Date())+".json"; document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  try{ localStorage.setItem("fc-lastBackup", new Date().toISOString()); }catch(e){}
+  renderSettings(); renderStandings();
+}
+// A full backup replaces settings; any file's weeks are merged in field by field, so a weekly
+// update file only fills in what it contains and leaves everything else (like behavior taps) alone.
+function importData(d){
+  if(!d || typeof d!=="object" || (!d.weeks && !d.config)) throw new Error("bad file");
+  let n = 0;
+  if(d.config && Array.isArray(d.config.classes)) config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config);
+  Object.keys(d.weeks||{}).forEach(id=>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(id)) return;
+    const inc = d.weeks[id]||{}; const cur = weeks[id] || {entries:{}};
+    Object.keys(inc).forEach(k=>{ if(k!=="entries") cur[k]=inc[k]; });
+    cur.entries = cur.entries || {};
+    Object.keys(inc.entries||{}).forEach(cid=>{ cur.entries[cid] = Object.assign({}, cur.entries[cid]||{}, inc.entries[cid]); });
+    weeks[id] = cur; n++;
+  });
+  localSave();
+  return (d.config ? "Restored settings and " : "Imported ")+n+" week"+(n===1?"":"s")+" of scores.";
+}
+
+function renderSettings(){
+  const root = document.getElementById("tab-settings"); root.replaceChildren();
+  const dis = readOnly ? {disabled:""} : {};
+
+  const classes = el("div",{class:"panel"}, el("h3",{text:"Classes"}),
+    el("div",{class:"crow muted"}, el("span",{text:"Name"}), el("span",{text:"Students"}), el("span",{text:"Personal best track"})),
+    config.classes.map(c=>{
+      const name = el("input",Object.assign({type:"text", value:c.name, "aria-label":"Class name"},dis));
+      name.addEventListener("change",()=>{ c.name = name.value.trim()||c.name; saveConfig(); render(); });
+      const nowSize = sizeFor(c, thisMonday());
+      const size = el("input",Object.assign({type:"number", min:"1", value:nowSize, "aria-label":"Number of students"},dis));
+      const choice = el("div",{class:"sizechoice", hidden:""});
+      const applyAll = el("button",{class:"btn",type:"button",text:"Fix it for every week"});
+      const applyFwd = el("button",{class:"btn",type:"button",text:"Enrollment changed this week"});
+      const cancel = el("button",{class:"linkbtn",type:"button",text:"Cancel"});
+      choice.append(el("span",{class:"muted",text:"Is this a correction, or did students join or leave?"}), applyAll, applyFwd, cancel);
+      const val = ()=>Math.max(1, Math.round(Number(size.value)||1));
+      size.addEventListener("input",()=>{ choice.hidden = (val()===nowSize); });
+      applyAll.addEventListener("click",()=>{ c.size = val(); c.sizeChanges = []; saveConfig(); render(); });
+      applyFwd.addEventListener("click",()=>{ const wk=thisMonday(); c.sizeChanges = (c.sizeChanges||[]).filter(x=>x.from!==wk).concat([{from:wk, size:val()}]); saveConfig(); render(); });
+      cancel.addEventListener("click",()=>{ size.value = nowSize; choice.hidden = true; });
+      const iep = el("input",Object.assign({type:"checkbox", "aria-label":"Compete against own past weeks"},dis)); iep.checked = !!c.iep;
+      iep.addEventListener("change",()=>{ c.iep = iep.checked; saveConfig(); render(); });
+      return el("div",null, el("div",{class:"crow"}, name, size, el("label",null, iep)), choice);
+    }),
+    el("p",{class:"muted",text:"Class size is used to count missing quiz scores as zero and to turn house points, absences, and tardies into per-student rates. When enrollment changes mid-year, choose \u201cEnrollment changed this week\u201d so earlier weeks keep the old number. Classes on the personal best track compete against their own past weeks instead of the other sections."})
+  );
+
+  const target = (weightTarget!=="default" && config.classes.some(c=>c.id===weightTarget)) ? weightTarget : "default";
+  const pick = el("select",Object.assign({"aria-label":"Whose weights"},dis), el("option",{value:"default",text:"Default (every class without its own)"}),
+    config.classes.map(c=>el("option",{value:c.id,text:c.name+(hasOwnWeights(c.id)?" (own weights)":"")})));
+  pick.value = target; pick.addEventListener("change",()=>{ weightTarget = pick.value; renderSettings(); });
+  let W = config.weights, intro = null, showSliders = true;
+  if(target!=="default"){
+    const cls = config.classes.find(c=>c.id===target);
+    const own = el("input",Object.assign({type:"checkbox"},dis)); own.checked = hasOwnWeights(target);
+    own.addEventListener("change",()=>{
+      config.classWeights = Object.assign({}, config.classWeights||{});
+      if(own.checked) config.classWeights[target] = Object.assign({}, config.weights); else delete config.classWeights[target];
+      saveConfig(); renderSettings(); renderStandings();
+    });
+    intro = el("label",{class:"ownlbl"}, own, "Give "+cls.name+" its own weights");
+    if(hasOwnWeights(target)) W = config.classWeights[target]; else showSliders = false;
+  }
+  const totalEl = el("p",{class:"total"});
+  const balBtn = el("button",Object.assign({class:"btn",type:"button",text:"Balance to 100%"},dis));
+  balBtn.addEventListener("click",()=>{
+    const t = CATS.reduce((a,c)=>a+(Number(W[c.key])||0),0); if(!t) return;
+    const raw = CATS.map(c=>({k:c.key, v:(Number(W[c.key])||0)*100/t}));
+    raw.forEach(x=>W[x.k]=Math.floor(x.v));
+    let left = 100 - raw.reduce((a,x)=>a+W[x.k],0);
+    raw.slice().sort((a,b)=>(b.v%1)-(a.v%1)).forEach(x=>{ if(left>0){ W[x.k]++; left--; } });
+    saveConfig(); renderSettings(); renderStandings();
+  });
+  const updTotal = ()=>{ const t = CATS.reduce((a,c)=>a+(Number(W[c.key])||0),0); totalEl.textContent = "Total: "+t+"%"+(t!==100?" (scores still work, but 100 keeps it easy to explain)":""); totalEl.className = "total"+(t!==100?" bad":""); balBtn.hidden = (t===100); };
+  const weights = el("div",{class:"panel"}, el("h3",{text:"Category weights"}),
+    el("div",{class:"ctrls"}, el("span",{class:"muted",text:"Weights for"}), pick),
+    intro,
+    showSliders ? CATS.map(cat=>{
+      const out = el("output",{text:(W[cat.key]||0)+"%"});
+      const r = el("input",Object.assign({type:"range", min:"0", max:"100", step:"1", value:W[cat.key]||0, "aria-label":cat.label+" weight"},dis));
+      r.addEventListener("input",()=>{ W[cat.key]=Number(r.value); out.textContent=r.value+"%"; updTotal(); saveConfig(); renderStandings(); });
+      return el("div",{class:"wrow"}, el("span",{text:cat.label}), r, out);
+    }) : el("p",{class:"muted",text:"Uses the default weights."}),
+    showSliders ? el("div",{class:"crow",style:"grid-template-columns:1fr auto"}, totalEl, balBtn) : null,
+    el("p",{class:"muted",text:"Every class is still ranked against the others in each category. A class's own weights only change which of those rankings count toward its score. Set a category to 0% and it doesn't count for that class at all."}));
+  updTotal();
+
+  const sName = el("input",Object.assign({type:"text", value:config.season.name, "aria-label":"Season name"},dis));
+  sName.addEventListener("change",()=>{ config.season.name = sName.value.trim()||config.season.name; saveConfig(); render(); });
+  const sStart = el("input",Object.assign({type:"date", value:config.season.start, "aria-label":"Season start"},dis));
+  sStart.addEventListener("change",()=>{ if(sStart.value){ config.season.start = iso(mondayOf(parseIso(sStart.value))); saveConfig(); render(); } });
+  const newName = el("input",Object.assign({type:"text", placeholder:"Next season name, e.g. Quarter 2", "aria-label":"New season name"},dis));
+  const startBtn = el("button",Object.assign({class:"btn", type:"button", text:"Start new season this week"},dis));
+  startBtn.addEventListener("click",()=>{
+    const nm = newName.value.trim(); if(!nm){ newName.focus(); return; }
+    const start = thisMonday();
+    if(start<=config.season.start){ newName.value=""; newName.placeholder="This season only just started"; return; }
+    const totals = seasonTotals(addWeeks(start,-1)); const champ = comp().slice().sort((a,b)=>totals[b.id]-totals[a.id])[0];
+    config.pastSeasons = (config.pastSeasons||[]).concat([{name:config.season.name, start:config.season.start, champion: champ?champ.name:""}]);
+    config.season = {name:nm, start};
+    current = start;
+    saveConfig(); render();
+  });
+  const past = (config.pastSeasons||[]).map(p=>el("li",{text:p.name+(p.champion?": won by "+p.champion:"")}));
+  const season = el("div",{class:"panel"}, el("h3",{text:"Season"}),
+    el("div",{class:"crow",style:"grid-template-columns:1fr 1fr"}, sName, sStart),
+    el("p",{class:"muted",text:"Standings add up every week of the season through the week you're viewing, and past seasons stay viewable with the week arrows. Starting a new season records this season's champion and resets the board; weekly numbers stay saved."}),
+    el("div",{class:"crow",style:"grid-template-columns:1fr auto"}, newName, startBtn),
+    past.length? el("div",null, el("p",{class:"muted",text:"Past seasons"}), el("ul",null,past)) : null
+  );
+
+  const last = lastBackup();
+  const dl = el("button",{class:"btn primary",type:"button",text:"Download backup"});
+  dl.addEventListener("click",downloadBackup);
+  const file = el("input",{type:"file",accept:".json,application/json",hidden:""});
+  const up = el("button",{class:"btn",type:"button",text:"Restore or import a file"});
+  up.addEventListener("click",()=>file.click());
+  const msg = el("p",{class:"importmsg",text:importMsg}); importMsg = "";
+  file.addEventListener("change",()=>{ const f=file.files[0]; if(!f) return; const rd=new FileReader();
+    rd.onload=()=>{ try{ importMsg = importData(JSON.parse(rd.result)); render(); }catch(e){ msg.textContent = "That file couldn't be read. Make sure it's a backup from this app."; } };
+    rd.readAsText(f); file.value=""; });
+  const backup = el("div",{class:"panel"}, el("h3",{text:"Backup"}),
+    el("p",{class:"muted",text:"Your scores are saved in this browser on this computer only. Download a backup every Friday and keep it in your Google Drive. If the browser ever gets cleared, restore from your latest backup and everything comes back. Last backup: "+(last? last.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}) : "never")+"."}),
+    el("div",{class:"ctrls"}, dl, up, file), msg);
+  root.append(el("div",{class:"set"}, classes, weights, season, backup));
+}
+
+let weightTarget = "default";
+const chart = {metric:"quiz", cls:"all", others:false, view:"standings"};
+function shortWeek(w){ const d=parseIso(w); return "Wk of "+d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
+function seriesData(metric){
+  const field = metric==="quiz" ? "quiz" : "hw";
+  const wks = seasonWeeks(current)
+    .filter(w=>config.classes.some(c=>num(entry(w,c.id)[field])!==null));
+  const labels = wks.map(w=>(weeks[w] && weeks[w][metric+"Name"]) || shortWeek(w));
+  const series = config.classes.map(c=>({c, vals: wks.map(w=> metric==="quiz" ? quizAvg(w,c) : num(entry(w,c.id)[field]))}));
+  return {wks, labels, series};
+}
+function changeFor(data, cid){
+  const s = data.series.find(x=>x.c.id===cid); if(!s) return null;
+  const idx = s.vals.map((v,i)=>v===null?-1:i).filter(i=>i>=0);
+  if(idx.length<2) return idx.length ? {only:true, v:s.vals[idx[0]], label:data.labels[idx[0]]} : null;
+  const a = idx[idx.length-2], b = idx[idx.length-1];
+  const diff = Math.round((s.vals[b]-s.vals[a])*10)/10;
+  const best = s.vals[b] >= Math.max(...idx.map(i=>s.vals[i]));
+  return {diff, from:data.labels[a], to:data.labels[b], best, v:s.vals[b]};
+}
+function changeText(ch, name){
+  if(!ch) return (name?name+": ":"")+"No scores yet.";
+  if(ch.only) return (name?name+": ":"")+Math.round(ch.v*10)/10+"% on "+ch.label+". The next one shows the change.";
+  const pts = Math.abs(ch.diff)===1?"point":"points";
+  const core = ch.diff>0 ? "up "+Math.abs(ch.diff)+" "+pts : ch.diff<0 ? "down "+Math.abs(ch.diff)+" "+pts : "held steady";
+  return (name?name+" ":"")+(name?core:core.charAt(0).toUpperCase()+core.slice(1))+" from "+ch.from+" to "+ch.to+(ch.best&&ch.diff>0?". Best yet!":".");
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function sv(tag, attrs, text){ const e=document.createElementNS(SVGNS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(text!==undefined) e.textContent=text; return e; }
+function drawChart(data, big){
+  const W=900, H=big?430:340, P={l:big?78:66,r:70,t:34,b:60};
+  const pw=W-P.l-P.r, ph=H-P.t-P.b, n=data.labels.length;
+  const visible = data.series.filter(s=>chart.cls==="all" || s.c.id===chart.cls || chart.others);
+  const all = visible.flatMap(s=>s.vals).filter(v=>v!==null);
+  let ymin = all.length ? Math.max(0, Math.floor((Math.min(...all)-5)/10)*10) : 0; const ymax = 100;
+  if(ymax-ymin<20) ymin = ymax-20;
+  const gx = 40, x = i=> P.l + gx + (n===1 ? (pw-2*gx)/2 : i*(pw-2*gx)/(n-1));
+  const y = v=> P.t + (ymax-v)/(ymax-ymin)*ph;
+  const fs = big?18:13;
+  const svg = sv("svg",{viewBox:"0 0 "+W+" "+H, role:"img", "aria-label":"Class "+(chart.metric==="quiz"?"quiz averages":"homework turn-in")+" over time"});
+  const step = (ymax-ymin)>50 ? 20 : 10;
+  for(let t=ymin; t<=ymax; t+=step){
+    svg.append(sv("line",{x1:P.l,x2:W-P.r,y1:y(t),y2:y(t),stroke:"var(--c-grid)","stroke-width":1}));
+    svg.append(sv("text",{x:P.l-10,y:y(t)+fs*0.35,"text-anchor":"end","font-size":fs,fill:"var(--c-text)","font-family":"Barlow Condensed, Arial Narrow, sans-serif"},t+"%"));
+  }
+  const every = n>8 ? Math.ceil(n/8) : 1;
+  data.labels.forEach((lb,i)=>{ if(i%every && i!==n-1) return;
+    const txt = lb.length>20 ? lb.slice(0,19)+"…" : lb;
+    svg.append(sv("text",{x:x(i),y:H-P.b+fs*1.8,"text-anchor":(n>1&&i===0)?"start":(n>1&&i===n-1)?"end":"middle","font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif"},txt)); });
+  const ordered = visible.slice().sort((a,b)=>(a.c.id===chart.cls)-(b.c.id===chart.cls));
+  ordered.forEach(s=>{
+    const idx = config.classes.indexOf(s.c);
+    const isSel = chart.cls!=="all" && s.c.id===chart.cls;
+    const faint = chart.cls!=="all" && !isSel;
+    const color = faint ? "var(--c-faint)" : isSel ? "var(--c-sel)" : "var(--s"+((idx%5)+1)+")";
+    const pts = s.vals.map((v,i)=>v===null?null:[x(i),y(v),v]).filter(Boolean);
+    if(pts.length>1) svg.append(sv("polyline",{points:pts.map(p=>p[0]+","+p[1]).join(" "),fill:"none",stroke:color,"stroke-width":isSel?(big?6:4):(faint?2:3),"stroke-linejoin":"round","stroke-linecap":"round"}));
+    pts.forEach(p=>{
+      svg.append(sv("circle",{cx:p[0],cy:p[1],r:isSel?(big?8:6):(faint?3:4.5),fill:color}));
+      if(isSel || chart.cls==="all" && visible.length===1) svg.append(sv("text",{x:p[0],y:p[1]-(big?16:12),"text-anchor":"middle","font-size":big?22:15,"font-weight":"700",fill:"var(--c-sel)","font-family":"Barlow Condensed, Arial Narrow, sans-serif"},String(Math.round(p[2]*10)/10)));
+    });
+  });
+  return svg;
+}
+function trendsControls(onChange, inShow){
+  const seg = el("div",{class:"seg",role:"group","aria-label":"Which scores"},
+    [["quiz","Quiz averages"],["hw","Homework turned in"]].map(([k,t])=>{ const b=el("button",{type:"button","aria-pressed":String(chart.metric===k),text:t}); b.addEventListener("click",()=>{chart.metric=k; onChange();}); return b; }));
+  const sel = el("select",{"aria-label":"Class"}, el("option",{value:"all",text:"All classes"}), config.classes.map(c=>el("option",{value:c.id,text:c.name})));
+  sel.value = chart.cls; sel.addEventListener("change",()=>{ chart.cls = sel.value; onChange(); });
+  const kids = [seg, sel];
+  if(chart.cls!=="all"){ const cb = el("input",{type:"checkbox"}); cb.checked = chart.others; cb.addEventListener("change",()=>{ chart.others=cb.checked; onChange(); }); kids.push(el("label",null,cb,"Show other classes")); }
+  return el("div",{class:"ctrls"}, kids);
+}
+function trendsBody(big){
+  const data = seriesData(chart.metric);
+  const frag = document.createDocumentFragment();
+  if(!data.labels.length){ frag.append(el("p",{class:"note",text: chart.metric==="quiz" ? "No quiz scores this season yet. Enter a class average or paste scores in Enter scores and the chart fills in." : "No homework numbers this season yet. They'll show up here once you enter them."})); return frag; }
+  frag.append(el("div",{class:"chartbox"}, drawChart(data, big)));
+  if(chart.cls==="all"){
+    frag.append(el("div",{class:"legend"}, data.series.map((s,i)=>el("span",null, el("i",{style:"background:var(--s"+((i%5)+1)+")"}), s.c.name))));
+    frag.append(el("div",{class:"changes"}, data.series.map(s=>el("div",{text:changeText(changeFor(data,s.c.id), s.c.name)}))));
+  } else {
+    const cls = config.classes.find(c=>c.id===chart.cls);
+    const ch = changeFor(data, chart.cls);
+    if(ch && !ch.only) frag.append(el("div",{class:"callout"}, el("b",{class:ch.diff<0?"neg":"", text:(ch.diff>0?"+":"")+ch.diff}), el("span",{text:changeText(ch)})));
+    else frag.append(el("p",{class:"note",text:changeText(ch, cls?cls.name:"")}));
+  }
+  return frag;
+}
+function renderTrends(){
+  const root = document.getElementById("tab-trends"); if(!root) return; root.replaceChildren();
+  root.append(trendsControls(renderTrends), trendsBody(false));
+  root.append(el("p",{class:"note",text:"These are each class's actual averages, not competition points. Name your quizzes and homework in Enter scores and those names show on the chart. Pick one class before projecting to spotlight its progress."}));
+  if(document.getElementById("show").classList.contains("on")) renderShow();
+}
+
+function renderShow(){
+  const body = document.getElementById("showBody"); body.replaceChildren();
+  const views = el("div",{class:"seg",role:"group","aria-label":"Scoreboard view"}, [["standings","Standings"],["trends","Class scores"]].map(([k,t])=>{ const b=el("button",{type:"button","aria-pressed":String(chart.view===k),text:t}); b.addEventListener("click",()=>{chart.view=k; renderShow();}); return b; }));
+  if(chart.view==="trends"){
+    const cls = config.classes.find(c=>c.id===chart.cls);
+    body.append(el("div",{class:"ctrls"}, views), el("h2",{text: cls ? cls.name : "Our classes"}), el("div",{class:"wk",text: (chart.metric==="quiz"?"Quiz averages":"Homework turned in")+", "+seasonFor(current).name}));
+    const c = trendsControls(()=>{ renderShow(); renderTrends(); }, true); body.append(c, trendsBody(true));
+    return;
+  }
+  body.append(el("div",{class:"ctrls"}, views));
+  const rows = sortedStandings();
+  body.append(el("h2",{text:"The Friday Challenge"}), el("div",{class:"wk",text: seasonFor(current).name+" standings for the "+fmtWeek(current).replace("Week","week")}));
+  let prevTotal=null, place=0;
+  rows.forEach((r,i)=>{
+    if(prevTotal===null || Math.abs(r.total-prevTotal)>1e-9) place=i+1; prevTotal=r.total;
+    body.append(el("div",{class:"srow"+(place===1&&r.total>0?" first":"")},
+      el("div",{class:"r",text:String(place)}),
+      el("div",null, el("div",{class:"n",text:r.c.name}), el("div",{class:"t",text:"This week so far: "+fmtPts(r.week)})),
+      el("div",{class:"p",text:fmtPts(r.total)})
+    ));
+  });
+  iepClasses().forEach(cls=>{
+    const r = iepWeek(current, cls);
+    if(r.pct!==null) body.append(el("div",{class:"iepline",text: cls.name+" beat its own average on "+Math.round(r.pct*100)+"% of categories this week."}));
+  });
+}
+
+function render(){
+  renderHeader(); renderStandings(); renderTrends(); renderEntry(); renderSettings();
+  if(document.getElementById("show").classList.contains("on")) renderShow();
+}
+
+/* ---------- controls ---------- */
+document.querySelectorAll("nav.tabs [role=tab]").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("nav.tabs [role=tab]").forEach(x=>x.setAttribute("aria-selected", String(x===b)));
+  ["standings","trends","entry","settings"].forEach(t=>document.getElementById("tab-"+t).hidden = (t!==b.dataset.tab));
+}));
+document.getElementById("prevWk").addEventListener("click",()=>{ current = addWeeks(current,-1); render(); });
+document.getElementById("nextWk").addEventListener("click",()=>{ current = addWeeks(current,1); render(); });
+const show = document.getElementById("show");
+document.getElementById("showBtn").addEventListener("click",()=>{ renderShow(); show.classList.add("on"); document.getElementById("closeShow").focus(); try{ show.requestFullscreen && show.requestFullscreen().catch(()=>{}); }catch(e){} });
+function closeShow(){ show.classList.remove("on"); try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){} }
+document.getElementById("closeShow").addEventListener("click",closeShow);
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && show.classList.contains("on")) closeShow(); });
+document.addEventListener("fullscreenchange",()=>{ if(!document.fullscreenElement && show.classList.contains("on")) show.classList.remove("on"); });
+
+/* ---------- boot ---------- */
+localLoad();
+render();
+
+// Standalone version: everything is kept in this browser. Ask the browser not to clear it.
+(function(){
+  let ok = true; try{ localStorage.setItem("fc-test","1"); localStorage.removeItem("fc-test"); }catch(e){ ok = false; }
+  setStatus(ok ? "Saved on this computer" : "This browser is blocking saving. Use a normal (not private) window.");
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+})();
+})();
+</script>
+</body>
+</html>

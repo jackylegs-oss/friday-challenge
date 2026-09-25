@@ -1,0 +1,3 @@
+# Backup/restore files contain real class data. Never commit them.
+*.json
+.DS_Store
