@@ -31,3 +31,11 @@ A single-file web app (`index.html`) that tracks a weekly competition between Mr
 ## Look
 
 Isibindi house colors: house green (`--house:#1E5B3C`, deep `#123826`) with gold accents (`--gold:#D9A23A`). Fonts: Graduate (display), Barlow (body), Barlow Condensed (numbers). Supports light/dark via `prefers-color-scheme` and `data-theme`. The projector view (`#show`) is a full-screen dark-green scoreboard.
+
+## Entering scores from reports
+
+When Mr. Johnson shares a gradebook export, PDF, or other report that may contain student information:
+
+- Extract only class-level numbers the app uses (quiz average with missing scores counted as zero — or better, `quiz`/`quizN`/`quizSum` so the app applies the class size — plus `hw`, `days`, `house`, `abs`, `tardy`).
+- Write them to an import file named like `friday-challenge-update-YYYY-MM-DD.json` in the format `{"app":"friday-challenge","version":1,"weeks":{"<Monday YYYY-MM-DD>":{"entries":{"c1":{...}}}}}` using the class IDs from his config (defaults `c1`–`c5`; ask if he's renamed or added classes). Omit `config` so his settings aren't replaced. He imports it via Settings → Restore or import a file.
+- Never put student names, IDs, individual scores, or any class data into `index.html` or any committed file. The repo and site are public. `.gitignore` blocks JSON and common report file types; don't override it.

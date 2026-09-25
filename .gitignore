@@ -1,3 +1,20 @@
-# Backup/restore files contain real class data. Never commit them.
+# Backup/restore/update files contain real class data. Never commit them.
 *.json
+
+# Score reports may contain student information. Never commit them.
+*.pdf
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.xlsm
+*.numbers
+*.doc
+*.docx
+*.txt
+*.png
+*.jpg
+*.jpeg
+*.heic
+
 .DS_Store
