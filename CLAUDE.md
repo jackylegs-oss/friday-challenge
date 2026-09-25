@@ -1,6 +1,6 @@
 # The Friday Challenge
 
-A single-file web app (`index.html`) that tracks a weekly competition between Mr. Johnson's 9th grade ELA classes. No build step, no dependencies beyond Google Fonts. Hosted on GitHub Pages from the `main` branch of `jackylegs-oss/friday-challenge`.
+A single-file web app (`index.html`) that tracks a weekly competition between Mr. Johnson's 9th grade ELA classes. No build step, no dependencies beyond Google Fonts. Hosted on GitHub Pages from the `main` branch of `jackylegs-oss/friday-challenge`, and served to the teacher through a Google Apps Script link (see below).
 
 ## Workflow for changes
 
@@ -10,12 +10,19 @@ A single-file web app (`index.html`) that tracks a weekly competition between Mr
 
 **Never commit `.json` files.** Backups hold real class data and are excluded in `.gitignore`. Never add student names or real scores to `index.html` — the repo and site are public.
 
+## Two ways the app runs
+
+- **Google link (the real one):** `apps-script/Code.gs` is pasted into an Apps Script project attached to a Google Sheet in the teacher's school Drive and deployed as a web app (execute as me, only myself). `doGet` fetches `index.html` from GitHub Pages on every load, so pushing to `main` updates it with no re-deploy. Scores are stored in the Sheet's `Data` tab, one row per doc (`config/main`, `weeks/YYYY-MM-DD`), JSON in column B. The app detects `google.script.run`, loads everything via `loadAll()`, stays read-only until that returns, saves each change via `saveDoc(path, json)` (through the `db` adapter and `queueWrite`/`flush`), and reloads when the tab becomes visible again. Only change `Code.gs` if storage needs to change; that requires the teacher to re-paste it and redeploy.
+- **Plain GitHub Pages URL:** no `google.script.run`, so it falls back to `localStorage` in that one browser. Kept working but not the one to use day to day.
+
+Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.script.run` in a scratch copy of the page and loading `Code.gs` into it.
+
 ## Data
 
-- Everything is saved in the browser's `localStorage` under `fc-config` (classes, weights, seasons) and `fc-weeks` (week ID `YYYY-MM-DD` of the Monday → `{entries: {classId: {...}}, quizName, hwName}`). `fc-lastBackup` stores the last backup date.
+- In the plain version, everything is saved in the browser's `localStorage` under `fc-config` (classes, weights, seasons) and `fc-weeks` (week ID `YYYY-MM-DD` of the Monday → `{entries: {classId: {...}}, quizName, hwName}`). `fc-lastBackup` stores the last backup date.
 - Settings → Backup downloads `friday-challenge-backup-YYYY-MM-DD.json`. Restore/import: a file with `config` replaces settings; `weeks` are merged field by field into existing weeks.
 - The standings page nudges a backup if none has been made in 7 days.
-- There's leftover code for a remote `db` (`queueWrite`/`flush`); `db` is always `null` in this standalone version, so saves go to localStorage only.
+- Imports also queue a save of every imported week (and config, for full backups) when running in Google mode.
 
 ## Scoring
 

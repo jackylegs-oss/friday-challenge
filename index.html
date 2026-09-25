@@ -309,7 +309,7 @@ async function flush(path){
   inflight[path] = true;
   try{
     await db.doc(path).set(JSON.parse(JSON.stringify(body)));
-    setStatus("Saved");
+    setStatus("Saved to Google");
   }catch(e){
     if(e && e.code==="invalid_argument"){ readOnly = true; setStatus("View only"); render(); }
     else {
@@ -492,7 +492,7 @@ function renderStandings(){
   const lb = lastBackup();
   if(Object.keys(weeks).length && (!lb || (Date.now()-lb.getTime()) > 7*864e5)){
     const b = el("button",{class:"linkbtn",type:"button",text:"Download a backup"}); b.addEventListener("click",downloadBackup);
-    root.append(el("div",{class:"nudge"}, el("span",{text: lb ? "It's been over a week since your last backup. " : "Your scores live only in this browser. "}), b));
+    root.append(el("div",{class:"nudge"}, el("span",{text: lb ? "It's been over a week since your last backup. " : db ? "No backup downloaded yet. " : "Your scores live only in this browser. "}), b));
   }
   root.append(board);
 
@@ -649,17 +649,19 @@ function downloadBackup(){
 // update file only fills in what it contains and leaves everything else (like behavior taps) alone.
 function importData(d){
   if(!d || typeof d!=="object" || (!d.weeks && !d.config)) throw new Error("bad file");
-  let n = 0;
-  if(d.config && Array.isArray(d.config.classes)) config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config);
+  let n = 0; const ids = [];
+  const newConfig = d.config && Array.isArray(d.config.classes);
+  if(newConfig) config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config);
   Object.keys(d.weeks||{}).forEach(id=>{
     if(!/^\d{4}-\d{2}-\d{2}$/.test(id)) return;
     const inc = d.weeks[id]||{}; const cur = weeks[id] || {entries:{}};
     Object.keys(inc).forEach(k=>{ if(k!=="entries") cur[k]=inc[k]; });
     cur.entries = cur.entries || {};
     Object.keys(inc.entries||{}).forEach(cid=>{ cur.entries[cid] = Object.assign({}, cur.entries[cid]||{}, inc.entries[cid]); });
-    weeks[id] = cur; n++;
+    weeks[id] = cur; ids.push(id); n++;
   });
   localSave();
+  if(db){ if(newConfig) saveConfig(); ids.forEach(saveWeek); }
   return (d.config ? "Restored settings and " : "Imported ")+n+" week"+(n===1?"":"s")+" of scores.";
 }
 
@@ -766,7 +768,9 @@ function renderSettings(){
     rd.onload=()=>{ try{ importMsg = importData(JSON.parse(rd.result)); render(); }catch(e){ msg.textContent = "That file couldn't be read. Make sure it's a backup from this app."; } };
     rd.readAsText(f); file.value=""; });
   const backup = el("div",{class:"panel"}, el("h3",{text:"Backup"}),
-    el("p",{class:"muted",text:"Your scores are saved in this browser on this computer only. Download a backup every Friday and keep it in your Google Drive. If the browser ever gets cleared, restore from your latest backup and everything comes back. Last backup: "+(last? last.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}) : "never")+"."}),
+    el("p",{class:"muted",text:(db
+      ? "Your scores are saved in your Google Sheet, so they show up in any browser where you open this link. A backup download now and then is still a good safety net. "
+      : "Your scores are saved in this browser on this computer only. Download a backup every Friday and keep it in your Google Drive. If the browser ever gets cleared, restore from your latest backup and everything comes back. ")+"Last backup: "+(last? last.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}) : "never")+"."}),
     el("div",{class:"ctrls"}, dl, up, file), msg);
   root.append(el("div",{class:"set"}, classes, weights, season, backup));
 }
@@ -914,15 +918,37 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape" && show.classList.c
 document.addEventListener("fullscreenchange",()=>{ if(!document.fullscreenElement && show.classList.contains("on")) show.classList.remove("on"); });
 
 /* ---------- boot ---------- */
-localLoad();
-render();
-
-// Standalone version: everything is kept in this browser. Ask the browser not to clear it.
-(function(){
+// Opened through the Google Apps Script link: scores live in the Google Sheet, so every browser sees the same data.
+const gsRun = ()=>window.google && google.script && google.script.run;
+const busy = ()=>Object.keys(pending).length>0 || Object.values(inflight).some(Boolean);
+function loadServer(first){
+  if(!first && busy()) return;
+  gsRun().withSuccessHandler(txt=>{
+    if(!first && busy()) return;
+    const d = JSON.parse(txt||"{}");
+    config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config||{});
+    weeks = d.weeks || {};
+    readOnly = false; setStatus("Saved to Google"); render();
+  }).withFailureHandler(()=>{ if(first) setStatus("Couldn't load your scores. Reload the page."); }).loadAll();
+}
+if(gsRun()){
+  db = {doc: path=>({set: body=>new Promise((res,rej)=>gsRun()
+    .withSuccessHandler(res)
+    .withFailureHandler(err=>rej({code:"unavailable", message:String(err && err.message || err)}))
+    .saveDoc(path, JSON.stringify(body)))})};
+  // Nothing is editable until the Sheet's data arrives, so an empty screen can't overwrite it.
+  readOnly = true; render(); setStatus("Loading…");
+  loadServer(true);
+  // Pick up changes made on another computer when coming back to this tab.
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && !readOnly) loadServer(false); });
+} else {
+  localLoad();
+  render();
+  // Standalone version: everything is kept in this browser. Ask the browser not to clear it.
   let ok = true; try{ localStorage.setItem("fc-test","1"); localStorage.removeItem("fc-test"); }catch(e){ ok = false; }
   setStatus(ok ? "Saved on this computer" : "This browser is blocking saving. Use a normal (not private) window.");
   try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
-})();
+}
 })();
 </script>
 </body>
