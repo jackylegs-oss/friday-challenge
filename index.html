@@ -567,7 +567,7 @@ function renderEntry(){
       let noteTxt = null, warn = false;
       if(info && !info.manual){ noteTxt = info.over ? info.n+" scores, but class size is "+info.size+". Update it in Settings." : info.missing ? info.n+" of "+info.size+" scored, "+info.missing+" counted as zero" : "All "+info.n+" scored"; warn = info.over; }
       return el("td",null, inp, el("div",{class:"pastewrap"}, b), noteTxt? el("small",{class:warn?"warnnote":"muted",style:"display:block;max-width:150px",text:noteTxt}):null); }],
-    ["Homework turned in (%)","Share of students with all weekly work in", cid=>numCell(cid,"hw","0–100","100")],
+    ["Homework turned in (%)","Share of students who turned in any homework this week",cid=>numCell(cid,"hw","0–100","100")],
     ["Behavior","Tap once for earned, twice for missed", dayCell],
     ["House points","Total earned by students in this class", cid=>numCell(cid,"house","total")],
     ["Unexcused absences","Enter last week's count, once the office has processed notes", cid=>numCell(cid,"abs","count")],
@@ -780,11 +780,14 @@ const chart = {metric:"quiz", cls:"all", others:false, view:"standings"};
 function shortWeek(w){ const d=parseIso(w); return "Wk of "+d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
 function seriesData(metric){
   const field = metric==="quiz" ? "quiz" : "hw";
-  const wks = seasonWeeks(current)
-    .filter(w=>config.classes.some(c=>num(entry(w,c.id)[field])!==null));
+  // The first season's chart also shows preseason weeks, so classes can see where they started.
+  const sn = seasonFor(current), first = sn.start===allSeasons()[0].start;
+  const range = first ? Object.keys(weeks).filter(w=>w<=current && (!sn.next || w<sn.next)).sort() : seasonWeeks(current);
+  const wks = range.filter(w=>config.classes.some(c=>num(entry(w,c.id)[field])!==null));
   const labels = wks.map(w=>(weeks[w] && weeks[w][metric+"Name"]) || shortWeek(w));
   const series = config.classes.map(c=>({c, vals: wks.map(w=> metric==="quiz" ? quizAvg(w,c) : num(entry(w,c.id)[field]))}));
-  return {wks, labels, series};
+  const startIdx = wks.findIndex(w=>w>=sn.start);
+  return {wks, labels, series, seasonIdx: startIdx>0 ? startIdx : null};
 }
 function changeFor(data, cid){
   const s = data.series.find(x=>x.c.id===cid); if(!s) return null;
@@ -824,6 +827,12 @@ function drawChart(data, big){
   data.labels.forEach((lb,i)=>{ if(i%every && i!==n-1) return;
     const txt = lb.length>20 ? lb.slice(0,19)+"…" : lb;
     svg.append(sv("text",{x:x(i),y:H-P.b+fs*1.8,"text-anchor":(n>1&&i===0)?"start":(n>1&&i===n-1)?"end":"middle","font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif"},txt)); });
+  if(data.seasonIdx!==null){
+    const sx = (x(data.seasonIdx-1)+x(data.seasonIdx))/2;
+    svg.append(sv("line",{x1:sx,x2:sx,y1:P.t,y2:P.t+ph,stroke:"var(--c-text)","stroke-width":1.5,"stroke-dasharray":"5 5"}));
+    svg.append(sv("text",{x:sx+6,y:P.t-10,"font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif","font-weight":"600"},"Season starts"));
+    svg.append(sv("text",{x:sx-6,y:P.t-10,"text-anchor":"end","font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif"},"Preseason"));
+  }
   const ordered = visible.slice().sort((a,b)=>(a.c.id===chart.cls)-(b.c.id===chart.cls));
   ordered.forEach(s=>{
     const idx = config.classes.indexOf(s.c);

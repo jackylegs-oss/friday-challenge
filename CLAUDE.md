@@ -32,6 +32,7 @@ Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.scri
 - **Perfect levels tie for first** (`PERFECT`): homework ≥ 95%, every behavior day earned, 0 absences, 0 tardies. Ties share averaged rank points.
 - **Missing quiz scores count as zero**: pasted scores are averaged over `max(scores pasted, class size)`. Class size can change mid-year via `sizeChanges` without affecting earlier weeks.
 - **Per-class weights**: `config.weights` is the default; `config.classWeights[classId]` overrides it for one class. A class's weekly score is the weighted average of its category points; season points sum weekly scores.
+- The Class scores chart for the first season also shows preseason weeks (before the season start), with a "Season starts" marker; those weeks never earn season points.
 - Classes flagged `iep` (shown as "personal best track") don't compete with the others; they're compared against their own last-4-week average.
 - Seasons: `config.season` plus `config.pastSeasons` (with recorded champion).
 
@@ -43,6 +44,6 @@ Isibindi house colors: house green (`--house:#1E5B3C`, deep `#123826`) with gold
 
 When Mr. Johnson shares a gradebook export, PDF, or other report that may contain student information:
 
-- Extract only class-level numbers the app uses (quiz average with missing scores counted as zero — or better, `quiz`/`quizN`/`quizSum` so the app applies the class size — plus `hw`, `days`, `house`, `abs`, `tardy`).
+- Extract only class-level numbers the app uses. Homework `hw` = % of students who turned in any homework that week with a score above 0. Quiz `quiz` = class average percent, "Missing" = 0, blank (ungraded or not enrolled yet) left out.
 - Write them to an import file named like `friday-challenge-update-YYYY-MM-DD.json` in the format `{"app":"friday-challenge","version":1,"weeks":{"<Monday YYYY-MM-DD>":{"entries":{"c1":{...}}}}}` using the class IDs from his config (defaults `c1`–`c5`; ask if he's renamed or added classes). Omit `config` so his settings aren't replaced. He imports it via Settings → Restore or import a file.
 - Never put student names, IDs, individual scores, or any class data into `index.html` or any committed file. The repo and site are public. `.gitignore` blocks JSON and common report file types; don't override it.
