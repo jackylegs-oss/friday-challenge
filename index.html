@@ -244,6 +244,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
+const APP_VERSION = "2026-09-27b";
 const DAYS = ["M","T","W","Th","F"];
 // A class at one of these levels can't really improve, so it ties for first in that category.
 const PERFECT = {
@@ -315,7 +316,7 @@ async function flush(path){
     else {
       // keep the unsaved version (unless something newer is already waiting) and try again shortly
       if(!pending[path]) pending[path] = ()=>body;
-      setStatus(e && e.code==="unavailable" ? "Reconnecting…" : "Couldn't save yet. Retrying…");
+      setStatus("Couldn't save to Google yet"+(e && e.message ? " ("+e.message+")" : "")+". Retrying…");
       clearTimeout(queueWrite["t"+path]);
       queueWrite["t"+path] = setTimeout(()=>flush(path), 2000+Math.random()*1500);
       inflight[path] = false; return;
@@ -773,6 +774,7 @@ function renderSettings(){
       : "Your scores are saved in this browser on this computer only. Download a backup every Friday and keep it in your Google Drive. If the browser ever gets cleared, restore from your latest backup and everything comes back. ")+"Last backup: "+(last? last.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}) : "never")+"."}),
     el("div",{class:"ctrls"}, dl, up, file), msg);
   root.append(el("div",{class:"set"}, classes, weights, season, backup));
+  root.append(el("p",{class:"muted",text:"App version "+APP_VERSION+(db ? " · Connected to Google Sheets" : " · Browser-only copy (open the Google link to sync)")}));
 }
 
 let weightTarget = "default";
@@ -938,7 +940,7 @@ function loadServer(first){
     config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config||{});
     weeks = d.weeks || {};
     readOnly = false; setStatus("Saved to Google"); render();
-  }).withFailureHandler(()=>{ if(first) setStatus("Couldn't load your scores. Reload the page."); }).loadAll();
+  }).withFailureHandler(err=>{ if(first) setStatus("Couldn't load your scores from Google ("+String(err && err.message || err)+"). Reload the page."); }).loadAll();
 }
 if(gsRun()){
   db = {doc: path=>({set: body=>new Promise((res,rej)=>gsRun()
