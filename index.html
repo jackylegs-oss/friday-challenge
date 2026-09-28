@@ -257,7 +257,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-09-27f";
+const APP_VERSION = "2026-09-27g";
 const DAYS = ["M","T","W","Th","F"];
 // A class at one of these levels can't really improve, so it ties for first in that category.
 const PERFECT = {
@@ -398,16 +398,19 @@ function weekResult(wk){
   if(n<2) return out;
   const wsum = {}; const totals = {}; cs.forEach(c=>{ totals[c.id]=0; wsum[c.id]=0; });
   CATS.forEach(cat=>{
-    let vals = cs.map(c=>metric(wk,c,cat.key));
-    if(vals.some(v=>v===null)) { out.cats[cat.key]=null; return; }
+    // A category counts as soon as two classes have a number; the rest join in when theirs are entered.
+    const have = cs.filter(c=>metric(wk,c,cat.key)!==null);
+    const waiting = cs.filter(c=>!have.includes(c));
+    if(have.length<2) { out.cats[cat.key]=null; return; }
+    let vals = have.map(c=>metric(wk,c,cat.key));
     let mode = "raw";
     const perfect = {};
     const test = PERFECT[cat.key];
-    cs.forEach((c,i)=>{ if(test && test(vals[i])) perfect[c.id]=true; });
-    const priors = cs.map(c=>priorAvg(wk,c,cat.key,4));
+    have.forEach((c,i)=>{ if(test && test(vals[i])) perfect[c.id]=true; });
+    const priors = have.map(c=>priorAvg(wk,c,cat.key,4));
     if(priors.every(p=>p!==null)){ vals = vals.map((v,i)=>v-priors[i]); mode="growth"; }
     // average ranks for ties; perfect classes tie for first
-    const order = cs.map((c,i)=>({c,v: perfect[c.id] ? Infinity : vals[i]*cat.dir})).sort((a,b)=>(a.v===b.v)?0:(b.v>a.v?1:-1));
+    const order = have.map((c,i)=>({c,v: perfect[c.id] ? Infinity : vals[i]*cat.dir})).sort((a,b)=>(a.v===b.v)?0:(b.v>a.v?1:-1));
     const pts = {}; const place = {};
     let i=0;
     while(i<order.length){
@@ -416,8 +419,8 @@ function weekResult(wk){
       for(let k=i;k<=j;k++){ pts[order[k].c.id] = n-avgRank; place[order[k].c.id]=i+1; }
       i=j+1;
     }
-    out.cats[cat.key] = {pts, place, mode, perfect};
-    cs.forEach(c=>{ const w = wOf(c.id, cat.key); if(w>0){ wsum[c.id]+=w; totals[c.id]+=w*pts[c.id]; } });
+    out.cats[cat.key] = {pts, place, mode, perfect, waiting};
+    have.forEach(c=>{ const w = wOf(c.id, cat.key); if(w>0){ wsum[c.id]+=w; totals[c.id]+=w*pts[c.id]; } });
   });
   cs.forEach(c=>{ if(wsum[c.id]>0) out.score[c.id]=totals[c.id]/wsum[c.id]; });
   return out;
@@ -487,10 +490,11 @@ function renderStandings(){
   let prevTotal = null, place = 0;
   rows.forEach((r,i)=>{
     if(prevTotal===null || Math.abs(r.total-prevTotal)>1e-9) place=i+1; prevTotal=r.total;
-    const chips = CATS.filter(cat=>wr.cats[cat.key] && wOf(r.c.id, cat.key)>0).map(cat=>{
+    const chips = CATS.filter(cat=>wr.cats[cat.key] && wr.cats[cat.key].place[r.c.id] && wOf(r.c.id, cat.key)>0).map(cat=>{
       const pl = wr.cats[cat.key].place[r.c.id];
       const pf = wr.cats[cat.key].perfect[r.c.id];
-      return el("span",{class:"chip"+(pl===1?" top":""), text: cat.short+" "+ordinal(pl)+(pf?", perfect":"")});
+      const soFar = wr.cats[cat.key].waiting.length ? " so far" : "";
+      return el("span",{class:"chip"+(pl===1?" top":""), text: cat.short+" "+ordinal(pl)+(pf?", perfect":"")+soFar});
     });
     board.append(el("div",{class:"row"+(place===1&&r.total>0?" first":"")},
       el("div",{class:"rank", text:String(place)}),
@@ -498,7 +502,7 @@ function renderStandings(){
         el("div",{class:"cname", text:r.c.name}),
         hasOwnWeights(r.c.id) ? el("div",{class:"ownw", text:"Scored mostly on "+CATS.filter(c=>wOf(r.c.id,c.key)>0).sort((a,b)=>wOf(r.c.id,b.key)-wOf(r.c.id,a.key)).slice(0,3).map(c=>c.short.toLowerCase()+" ("+wOf(r.c.id,c.key)+"%)").join(", ")}) : null,
         el("div",{class:"bar"}, el("i",{style:"width:"+Math.max(2,(r.total/max)*100)+"%"})),
-        el("div",{class:"chips"}, chips.length?chips:[el("span",{class:"chip",text:"No full categories yet this week"})])
+        el("div",{class:"chips"}, chips.length?chips:[el("span",{class:"chip",text:"Nothing entered yet this week"})])
       ),
       el("div",{class:"pts"}, el("b",{text:fmtPts(r.total)}), el("small",{text:"season points"}), el("small",{text:"This week: "+fmtPts(r.week)}))
     ));
@@ -508,11 +512,21 @@ function renderStandings(){
     const b = el("button",{class:"linkbtn",type:"button",text:"Download a backup"}); b.addEventListener("click",downloadBackup);
     root.append(el("div",{class:"nudge"}, el("span",{text: lb ? "It's been over a week since your last backup. " : db ? "No backup downloaded yet. " : "Your scores live only in this browser. "}), b));
   }
+  // Weeks before the season starts are practice: they feed the baseline but never add season points.
+  const sn = seasonFor(current);
+  if(current < sn.start){
+    const go = el("button",{class:"linkbtn",type:"button",text:"Go to the "+fmtWeek(sn.start).replace("Week","week")}); go.addEventListener("click",()=>{ current = sn.start; render(); });
+    root.append(el("div",{class:"nudge"}, el("span",{text:"This is a preseason week. Its numbers count toward each class's baseline and “This week” below, but "+sn.name+" season points start the "+fmtWeek(sn.start).replace("Week","week")+". "}), go));
+  }
   root.append(board);
 
-  const waiting = CATS.filter(cat=>!wr.cats[cat.key] && comp().some(c=>wOf(c.id, cat.key)>0)).map(c=>c.short.toLowerCase());
+  const waiting = CATS.filter(cat=>comp().some(c=>wOf(c.id, cat.key)>0)).map(cat=>{
+    const r = wr.cats[cat.key];
+    if(!r) return cat.short.toLowerCase();
+    return r.waiting.length ? cat.short.toLowerCase()+" for "+r.waiting.map(c=>c.name).join(", ") : null;
+  }).filter(Boolean);
   root.append(el("p",{class:"note", text: waiting.length
-    ? "This week so far. Still waiting on: "+waiting.join(", ")+". A category counts once every class has a number in it."
+    ? "This week so far. Still waiting on: "+waiting.join("; ")+". Each category counts as soon as two classes have a number, and scores update as you enter the rest."
     : "All categories are in for this week."}));
   const rawCats = CATS.filter(c=>wr.cats[c.key] && wr.cats[c.key].mode==="raw").map(c=>c.short.toLowerCase());
   const growCats = CATS.filter(c=>wr.cats[c.key] && wr.cats[c.key].mode==="growth");

@@ -28,7 +28,7 @@ Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.scri
 
 - Six categories (`CATS`): quiz growth (`quiz`), homework turned in (`hw`), behavior (`behavior`, M–F earned/missed taps), house points (`house`), unexcused absences (`attendance`, field `abs`), tardies (`tardy`). Absences and tardies are lower-is-better (`dir:-1`). House points, absences and tardies are divided by class size.
 - Each category is ranked on **growth**: this week's value minus the class's average over its last 4 prior weeks with data. If any class lacks prior data for a category, that category falls back to raw ranking that week.
-- A category only counts once every competing class has a number in it.
+- A category counts as soon as two competing classes have a number in it; points stay on the 5..1 scale (N - average rank) and classes still missing get no points for it yet, so standings update live as numbers are entered. Weeks before the season start show a preseason notice.
 - **Perfect levels tie for first** (`PERFECT`): homework ≥ 95%, every behavior day earned, 0 absences, 0 tardies. Ties share averaged rank points.
 - **Missing quiz scores count as zero**: pasted scores are averaged over `max(scores pasted, class size)`. Class size can change mid-year via `sizeChanges` without affecting earlier weeks.
 - **Per-class weights**: `config.weights` is the default; `config.classWeights[classId]` overrides it for one class. A class's weekly score is the weighted average of its category points; season points sum weekly scores.
