@@ -40,6 +40,13 @@ Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.scri
 
 Isibindi house colors: house green (`--house:#1E5B3C`, deep `#123826`) with gold accents (`--gold:#D9A23A`). Fonts: Graduate (display), Barlow (body), Barlow Condensed (numbers). Supports light/dark via `prefers-color-scheme` and `data-theme`. The projector view (`#show`) is a full-screen dark-green scoreboard with three views: Standings, Compare classes (`compareBoard`: each class's average quiz % and homework-turned-in % over every week so far, plus "goal this week" = its last-4-week average, the number growth scoring compares against), and Class scores (the chart).
 
+## Updating from the Google Sheet (preferred)
+
+In Google mode, Settings has "Update scores from Sheet", which calls `updateFromGradebooks()` in `Code.gs`. It reads, inside Google:
+- **Gradebook tabs**, one per class, named like the class ("Period 2"; "Period 2 gradebook" also matches, "Period 20" doesn't), holding the Student Task Scores CSV. Quiz = Assessments columns, % of max, blank and "Missing" = 0 over the whole roster. Homework = % of students with any Homework item due that week scored above 0 (blank cells ignored). Columns more than half blank are treated as not graded yet and skipped. The Skip tab (Class | Assignment) skips columns by name. Weeks are Mon–Sun by due date.
+- **Attendance tab**: row 1 needs a date/week column and a class/period column, plus count columns ("Unexcused absences", "Tardies") or a Status column (one row per incident: Unexcused / Tardy). Every class gets a number (0 if no rows) for each week in the tab.
+It merges quiz/hw/abs/tardy into the Data tab week docs (removing `quizN`/`quizSum` when it sets `quiz`), keeps everything else, only fills quiz/hw names if empty, and returns report lines the app shows. Only class-level numbers leave the Sheet. Changing `Code.gs` means the teacher re-pastes it and deploys a new version (Deploy → Manage deployments → Edit → New version).
+
 ## Entering scores from reports
 
 When Mr. Johnson shares a gradebook export, PDF, or other report that may contain student information:

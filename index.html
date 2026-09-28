@@ -100,6 +100,8 @@ table.entry{border-collapse:collapse;width:100%;min-width:760px}
 .ownw{font-size:14px;color:var(--slate);margin-top:2px}
 .ownlbl{display:flex;align-items:center;gap:8px;font-weight:600;margin:0 0 14px}
 .importmsg{font-weight:600;color:var(--house)}
+.sheetmsg{margin:12px 0 0;padding-left:20px;font-size:14px;white-space:pre-wrap}
+.sheetmsg li:first-child{font-weight:600;color:var(--house)}
 .nudge{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 12px;padding:10px 14px;border:1px solid var(--gold);border-radius:10px;background:var(--gold-soft);color:var(--ink)}
 .pastewrap{display:flex;align-items:center;gap:8px;margin-top:6px}
 .pastebtn{border:0;background:transparent;color:var(--house);font-weight:600;font-size:14px;padding:2px 0;text-decoration:underline;text-underline-offset:3px}
@@ -255,7 +257,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-09-27d";
+const APP_VERSION = "2026-09-27f";
 const DAYS = ["M","T","W","Th","F"];
 // A class at one of these levels can't really improve, so it ties for first in that category.
 const PERFECT = {
@@ -785,8 +787,34 @@ function renderSettings(){
       ? "Your scores are saved in your Google Sheet, so they show up in any browser where you open this link. A backup download now and then is still a good safety net. "
       : "Your scores are saved in this browser on this computer only. Download a backup every Friday and keep it in your Google Drive. If the browser ever gets cleared, restore from your latest backup and everything comes back. ")+"Last backup: "+(last? last.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}) : "never")+"."}),
     el("div",{class:"ctrls"}, dl, up, file), msg);
-  root.append(el("div",{class:"set"}, classes, weights, season, backup));
+  const sheetPanel = db ? el("div",{class:"panel"}, el("h3",{text:"Update from your Google Sheet"}),
+    el("p",{class:"muted",text:"Import each class's gradebook (Student Task Scores CSV) into your Friday Challenge spreadsheet as its own tab, named exactly like the class here (“Period 2”). For absences and tardies, add a tab named “Attendance”. Then click Update. The math happens inside Google and only class averages come back to the app, so student names never leave your spreadsheet."}),
+    el("div",{class:"ctrls"}, (()=>{ const b = el("button",{class:"btn primary",type:"button",text: sheetBusy ? "Updating…" : "Update scores from Sheet"}); if(sheetBusy || readOnly) b.disabled = true; b.addEventListener("click", updateFromSheet); return b; })()),
+    sheetMsg.length ? el("ul",{class:"sheetmsg"}, sheetMsg.map(t=>el("li",{text:t}))) : null
+  ) : null;
+  root.append(el("div",{class:"set"}, classes, weights, season, sheetPanel, backup));
   root.append(el("p",{class:"muted",text:"App version "+APP_VERSION+(db ? " · Connected to Google Sheets" : " · Browser-only copy (open the Google link to sync)")}));
+}
+
+let sheetMsg = [], sheetBusy = false;
+// Waits for any unsaved edits, has the Google script rebuild quiz, homework, absence, and tardy
+// numbers from the Sheet's gradebook and Attendance tabs, then reloads everything.
+async function updateFromSheet(){
+  sheetBusy = true; readOnly = true; sheetMsg = ["Saving your latest changes first…"]; renderSettings();
+  while(busy()) await new Promise(r=>setTimeout(r,300));
+  sheetMsg = ["Reading your gradebook tabs…"]; renderSettings(); setStatus("Updating from your Sheet…");
+  gsRun().withSuccessHandler(txt=>{
+    const r = JSON.parse(txt); sheetBusy = false;
+    sheetMsg = ["Updated "+r.weeks+" week"+(r.weeks===1?"":"s")+"."].concat(r.lines);
+    loadServer(true);
+  }).withFailureHandler(err=>{
+    sheetBusy = false; readOnly = false;
+    const m = String(err && err.message || err);
+    sheetMsg = [/not found|updateFromGradebooks/i.test(m)
+      ? "Your Google script is an older version. Paste the new Code.gs into Apps Script and deploy a new version (Deploy → Manage deployments → Edit → New version)."
+      : "Couldn't update: "+m];
+    setStatus("Saved to Google"); render();
+  }).updateFromGradebooks();
 }
 
 let weightTarget = "default";
