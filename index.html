@@ -257,7 +257,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-09-27g";
+const APP_VERSION = "2026-09-27h";
 const DAYS = ["M","T","W","Th","F"];
 // A class at one of these levels can't really improve, so it ties for first in that category.
 const PERFECT = {
@@ -778,7 +778,18 @@ function renderSettings(){
     current = start;
     saveConfig(); render();
   });
-  const past = (config.pastSeasons||[]).map(p=>el("li",{text:p.name+(p.champion?": won by "+p.champion:"")}));
+  const past = (config.pastSeasons||[]).map((p,idx)=>{
+    const li = el("li",null, p.name+(p.champion?": won by "+p.champion:"")+" (started "+fmtWeek(p.start).replace("Week of ","")+") ");
+    if(!readOnly){
+      const rm = el("button",{class:"linkbtn",type:"button",text:"Remove"});
+      rm.addEventListener("click",()=>{
+        if(!confirm("Remove "+p.name+" from past seasons?\n\nNo scores are deleted. Its weeks just stop being a separate season.")) return;
+        config.pastSeasons = config.pastSeasons.filter((_,i)=>i!==idx); saveConfig(); render();
+      });
+      li.append(rm);
+    }
+    return li;
+  });
   const season = el("div",{class:"panel"}, el("h3",{text:"Season"}),
     el("div",{class:"crow",style:"grid-template-columns:1fr 1fr"}, sName, sStart),
     el("p",{class:"muted",text:"Standings add up every week of the season through the week you're viewing, and past seasons stay viewable with the week arrows. Starting a new season records this season's champion and resets the board; weekly numbers stay saved."}),
