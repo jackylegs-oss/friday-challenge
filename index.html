@@ -91,6 +91,31 @@ table.entry{border-collapse:collapse;width:100%;min-width:760px}
 .day{width:30px;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--field);font-size:12px;font-weight:700;color:var(--slate);padding:0}
 .day[data-v="y"]{background:var(--up);border-color:var(--up);color:#fff}
 .day[data-v="n"]{background:var(--down);border-color:var(--down);color:#fff}
+.day[data-v="x"]{background:transparent;border-style:dashed;color:var(--slate);text-decoration:line-through}
+.dots{display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap}
+.dots i{width:14px;height:14px;border-radius:3px;background:var(--line);display:inline-block}
+.dots i.y{background:var(--up)} .dots i.n{background:var(--down)} .dots i.x{background:transparent;border:1px dashed var(--slate)}
+.dots .gap{width:7px;height:1px;background:transparent}
+.streakline{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-size:14px;color:var(--slate)}
+.streakline b{color:var(--ink)}
+.chip.mult{border-color:var(--gold);background:var(--gold-soft);color:var(--ink);font-weight:700}
+.bgrid{display:grid;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;overflow-x:auto}
+.bgrid .brow{display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:14px;align-items:center}
+.bgrid .wkgroups{display:flex;gap:12px;flex-wrap:nowrap}
+.bgrid .wkg{display:flex;flex-direction:column;gap:4px}
+.bgrid .wkg small{font-size:12px;color:var(--slate);white-space:nowrap}
+.bgrid .dots{flex-wrap:nowrap}
+.bgrid .dots i{width:20px;height:20px}
+.bgrid .bname{font-weight:700}
+.bgrid .bstat{font-size:14px;color:var(--slate)}
+.bgrid .bstat b{color:var(--ink)}
+#show .dots i{width:clamp(12px,1.5vw,24px);height:clamp(12px,1.5vw,24px);background:rgba(255,255,255,.18)}
+#show .dots i.y{background:#5FBF82} #show .dots i.n{background:#E08469} #show .dots i.x{background:transparent;border:1px dashed rgba(255,255,255,.5)}
+#show .srow .dots{margin-top:.5em}
+#show .bgrid{background:transparent;border:0;padding:0}
+#show .bgrid .bname{font-size:clamp(18px,2.4vw,34px)}
+#show .bgrid .bstat,#show .bgrid .wkg small{color:rgba(255,255,255,.85);font-size:clamp(13px,1.5vw,22px)}
+#show .bgrid .bstat b{color:var(--gold)}
 .hint{color:var(--slate);font-size:14px;margin:12px 2px}
 
 .warnnote{color:var(--down);font-size:14px;font-weight:600}
@@ -257,7 +282,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-09-27i";
+const APP_VERSION = "2026-09-27j";
 // Growth compares each class with its own most recent earlier week that has a number (week over week).
 const GROWTH_WEEKS = 1;
 const DAYS = ["M","T","W","Th","F"];
@@ -392,6 +417,61 @@ function priorAvg(wk, cls, key, max){
   return use.length ? use.reduce((a,b)=>a+b,0)/use.length : null;
 }
 
+/* ---------- behavior streaks ----------
+   A perfect week (every school day earned) raises a class's streak level by one, up to 5.
+   A week with a missed day, or a finished week with a day left blank, drops it by one (soft reset).
+   A perfect week's whole score is multiplied by 1.10 per level: x1.10, x1.21, x1.33, x1.46, x1.61.
+   Days marked "no school" are skipped. Streaks restart with each season. */
+const STREAK = {rate:0.10, cap:5};
+function weekBehavior(wk, cid){
+  const d = entry(wk,cid).days || [];
+  const vals = [0,1,2,3,4].map(i=>d[i]||"");
+  if(!vals.some(v=>v==="y"||v==="n")) return "none";
+  if(vals.includes("n")) return "broken";
+  return vals.every(v=>v==="y"||v==="x") ? "perfect" : "partial";
+}
+function streakInfo(wk, cls){
+  const sn = seasonFor(wk);
+  let level = 0, before = 0;
+  Object.keys(weeks).filter(w=>w>=sn.start && w<=wk && (!sn.next || w<sn.next)).sort().forEach(w=>{
+    before = level;
+    const st = weekBehavior(w, cls.id);
+    if(st==="perfect") level = Math.min(level+1, STREAK.cap);
+    else if(st==="broken" || (st==="partial" && w<thisMonday())) level = Math.max(level-1, 0);
+  });
+  const state = weekBehavior(wk, cls.id);
+  if(!weeks[wk]) before = level;
+  const mult = state==="perfect" ? Math.pow(1+STREAK.rate, level) : 1;
+  const next = Math.pow(1+STREAK.rate, Math.min(before+1, STREAK.cap));
+  return {level, before, state, mult, next};
+}
+// Earned days in a row, counting back from the latest marked day (no-school and blank days are skipped).
+function dayStreak(upTo, cls){
+  const seq = [];
+  Object.keys(weeks).filter(w=>w<=upTo).sort().forEach(w=>(entry(w,cls.id).days||[]).forEach(v=>{ if(v==="y"||v==="n") seq.push(v); }));
+  let n = 0; for(let i=seq.length-1; i>=0 && seq[i]==="y"; i--) n++;
+  return n;
+}
+// The last two weeks (up to the one being viewed) as colored day squares.
+function dayDots(upTo, cls){
+  const box = el("span",{class:"dots","aria-label":"Behavior, last two weeks"});
+  [addWeeks(upTo,-1), upTo].forEach((w,wi)=>{
+    if(wi) box.append(el("span",{class:"gap"}));
+    const d = entry(w,cls.id).days || [];
+    DAYS.forEach((lbl,i)=>{ const v = d[i]||""; box.append(el("i",{class:v, title:fmtWeek(w)+", "+lbl+": "+(v==="y"?"earned":v==="n"?"missed":v==="x"?"no school":"not marked")})); });
+  });
+  return box;
+}
+function streakText(wk, cls){
+  const s = streakInfo(wk, cls), ds = dayStreak(wk, cls), parts = [];
+  parts.push(ds ? "\u{1F525} "+ds+" day"+(ds===1?"":"s")+" in a row" : "No behavior streak yet");
+  if(s.state==="perfect") parts.push("Perfect week: points \u00d7"+s.mult.toFixed(2));
+  else if(s.state==="partial" && wk>=thisMonday()) parts.push("Perfect so far. Finish the week for \u00d7"+s.next.toFixed(2));
+  else if(s.state==="broken") parts.push(s.before ? (s.level ? "Streak dropped to level "+s.level : "Streak reset") : "Next perfect week: ×"+s.next.toFixed(2));
+  else parts.push("Next perfect week: \u00d7"+s.next.toFixed(2));
+  return parts.join(" \u00b7 ");
+}
+
 // rank competitive classes for one week
 function weekResult(wk){
   const cs = comp(); const n = cs.length;
@@ -424,7 +504,8 @@ function weekResult(wk){
     out.cats[cat.key] = {pts, place, mode, perfect, waiting};
     have.forEach(c=>{ const w = wOf(c.id, cat.key); if(w>0){ wsum[c.id]+=w; totals[c.id]+=w*pts[c.id]; } });
   });
-  cs.forEach(c=>{ if(wsum[c.id]>0) out.score[c.id]=totals[c.id]/wsum[c.id]; });
+  // A perfect behavior week multiplies the whole weekly score (compounding streak).
+  cs.forEach(c=>{ if(wsum[c.id]>0) out.score[c.id]=totals[c.id]/wsum[c.id]*streakInfo(wk,c).mult; });
   return out;
 }
 // Every season in order, each running until the next one starts.
@@ -507,7 +588,8 @@ function renderStandings(){
         el("div",{class:"cname", text:r.c.name}),
         hasOwnWeights(r.c.id) ? el("div",{class:"ownw", text:"Scored mostly on "+CATS.filter(c=>wOf(r.c.id,c.key)>0).sort((a,b)=>wOf(r.c.id,b.key)-wOf(r.c.id,a.key)).slice(0,3).map(c=>c.short.toLowerCase()+" ("+wOf(r.c.id,c.key)+"%)").join(", ")}) : null,
         el("div",{class:"bar"}, el("i",{style:"width:"+Math.max(2,(r.total/max)*100)+"%"})),
-        el("div",{class:"chips"}, chips.length?chips:[el("span",{class:"chip",text:"Nothing entered yet this week"})])
+        el("div",{class:"chips"}, chips.length?chips:[el("span",{class:"chip",text:"Nothing entered yet this week"})], (()=>{ const st=streakInfo(current,r.c); return st.mult>1 ? el("span",{class:"chip mult",text:"Behavior streak \u00d7"+st.mult.toFixed(2)}) : null; })()),
+        el("div",{class:"streakline"}, dayDots(current, r.c), el("span",{text:streakText(current, r.c)}))
       ),
       el("div",{class:"pts"}, el("b",{text:fmtPts(r.total)}), el("small",{text: seasonFor(current).pre ? "preseason points" : "season points"}), el("small",{text:"This week: "+fmtPts(r.week)}))
     ));
@@ -576,11 +658,12 @@ function renderEntry(){
     const d = ((wk.entries[cid]||{}).days || [null,null,null,null,null]).slice();
     const box = el("div",{class:"days"});
     DAYS.forEach((lbl,i)=>{
-      const b = el("button",{class:"day", type:"button", "data-v": d[i]||"", "aria-label": lbl+" behavior: "+(d[i]==="y"?"earned":d[i]==="n"?"missed":"not marked"), text:lbl});
+      const said = v=>lbl+" behavior: "+(v==="y"?"earned":v==="n"?"missed":v==="x"?"no school":"not marked");
+      const b = el("button",{class:"day", type:"button", "data-v": d[i]||"", "aria-label": said(d[i]), text:lbl});
       if(readOnly) b.disabled = true;
       b.addEventListener("click",()=>{
-        d[i] = d[i]===null||d[i]===undefined||d[i]==="" ? "y" : d[i]==="y" ? "n" : null;
-        b.dataset.v = d[i]||""; b.setAttribute("aria-label", lbl+" behavior: "+(d[i]==="y"?"earned":d[i]==="n"?"missed":"not marked"));
+        d[i] = !d[i] ? "y" : d[i]==="y" ? "n" : d[i]==="n" ? "x" : null;
+        b.dataset.v = d[i]||""; b.setAttribute("aria-label", said(d[i]));
         setVal(cid,"days",d.slice());
       });
       box.append(b);
@@ -601,7 +684,7 @@ function renderEntry(){
       if(info && !info.manual){ noteTxt = info.over ? info.n+" scores, but class size is "+info.size+". Update it in Settings." : info.missing ? info.n+" of "+info.size+" scored, "+info.missing+" counted as zero" : "All "+info.n+" scored"; warn = info.over; }
       return el("td",null, inp, el("div",{class:"pastewrap"}, b), noteTxt? el("small",{class:warn?"warnnote":"muted",style:"display:block;max-width:150px",text:noteTxt}):null); }],
     ["Homework turned in (%)","Share of students who turned in any homework this week",cid=>numCell(cid,"hw","0–100","100")],
-    ["Behavior","Tap once for earned, twice for missed", dayCell],
+    ["Behavior","Tap once for earned, twice for missed, three times for no school", dayCell],
     ["House points","Total earned by students in this class", cid=>numCell(cid,"house","total")],
     ["Unexcused absences","Enter last week's count, once the office has processed notes", cid=>numCell(cid,"abs","count")],
     ["Tardies","Total for the week", cid=>numCell(cid,"tardy","count")]
@@ -921,14 +1004,36 @@ function drawChart(data, big){
 }
 function trendsControls(onChange, inShow){
   const seg = el("div",{class:"seg",role:"group","aria-label":"Which scores"},
-    [["quiz","Quiz averages"],["hw","Homework turned in"]].map(([k,t])=>{ const b=el("button",{type:"button","aria-pressed":String(chart.metric===k),text:t}); b.addEventListener("click",()=>{chart.metric=k; onChange();}); return b; }));
+    [["quiz","Quiz averages"],["hw","Homework turned in"],["behavior","Behavior by day"]].map(([k,t])=>{ const b=el("button",{type:"button","aria-pressed":String(chart.metric===k),text:t}); b.addEventListener("click",()=>{chart.metric=k; onChange();}); return b; }));
   const sel = el("select",{"aria-label":"Class"}, el("option",{value:"all",text:"All classes"}), config.classes.map(c=>el("option",{value:c.id,text:c.name})));
   sel.value = chart.cls; sel.addEventListener("change",()=>{ chart.cls = sel.value; onChange(); });
   const kids = [seg, sel];
   if(chart.cls!=="all"){ const cb = el("input",{type:"checkbox"}); cb.checked = chart.others; cb.addEventListener("change",()=>{ chart.others=cb.checked; onChange(); }); kids.push(el("label",null,cb,"Show other classes")); }
   return el("div",{class:"ctrls"}, kids);
 }
+// Every class's behavior, one square per school day, for the last four weeks up to the week being viewed.
+function behaviorBoard(){
+  const wks = [-3,-2,-1,0].map(n=>addWeeks(current,n));
+  const cls = config.classes.filter(c=>chart.cls==="all" || c.id===chart.cls);
+  return el("div",{class:"bgrid"}, cls.map(c=>{
+    const groups = el("div",{class:"wkgroups"}, wks.map(w=>{
+      const d = entry(w,c.id).days||[], box = el("span",{class:"dots"});
+      DAYS.forEach((lbl,i)=>{ const v=d[i]||""; box.append(el("i",{class:v,title:fmtWeek(w)+", "+lbl+": "+(v==="y"?"earned":v==="n"?"missed":v==="x"?"no school":"not marked")})); });
+      return el("div",{class:"wkg"}, el("small",{text:shortWeek(w).replace("Wk of ","")}), box);
+    }));
+    const s = streakInfo(current,c), ds = dayStreak(current,c);
+    return el("div",{class:"brow"},
+      el("div",null, el("div",{class:"bname",text:c.name}),
+        el("div",{class:"bstat"}, el("b",{text:"\u{1F525} "+ds+" day"+(ds===1?"":"s")}), " in a row", el("br"), "Streak level "+s.level+(s.mult>1?" \u00b7 \u00d7"+s.mult.toFixed(2):""))),
+      groups);
+  }));
+}
 function trendsBody(big){
+  if(chart.metric==="behavior"){
+    const frag = document.createDocumentFragment();
+    frag.append(behaviorBoard(), el("p",{class:"note",text:"Green = earned, red = missed, dashed = no school. Every perfect week raises a class's streak level and multiplies that week's points by 1.10 per level (up to \u00d71.61). A missed day drops the streak one level."}));
+    return frag;
+  }
   const data = seriesData(chart.metric);
   const frag = document.createDocumentFragment();
   if(!data.labels.length){ frag.append(el("p",{class:"note",text: chart.metric==="quiz" ? "No quiz scores this season yet. Enter a class average or paste scores in Enter scores and the chart fills in." : "No homework numbers this season yet. They'll show up here once you enter them."})); return frag; }
@@ -981,7 +1086,7 @@ function renderShow(){
   const views = el("div",{class:"seg",role:"group","aria-label":"Scoreboard view"}, [["standings","Standings"],["compare","Compare classes"],["trends","Class scores"]].map(([k,t])=>{ const b=el("button",{type:"button","aria-pressed":String(chart.view===k),text:t}); b.addEventListener("click",()=>{chart.view=k; renderShow();}); return b; }));
   if(chart.view==="trends"){
     const cls = config.classes.find(c=>c.id===chart.cls);
-    body.append(el("div",{class:"ctrls"}, views), el("h2",{text: cls ? cls.name : "Our classes"}), el("div",{class:"wk",text: (chart.metric==="quiz"?"Quiz averages":"Homework turned in")+", "+seasonFor(current).name}));
+    body.append(el("div",{class:"ctrls"}, views), el("h2",{text: cls ? cls.name : "Our classes"}), el("div",{class:"wk",text: (chart.metric==="quiz"?"Quiz averages":chart.metric==="hw"?"Homework turned in":"Behavior by day")+", "+seasonFor(current).name}));
     const c = trendsControls(()=>{ renderShow(); renderTrends(); }, true); body.append(c, trendsBody(true));
     return;
   }
@@ -999,7 +1104,7 @@ function renderShow(){
     if(prevTotal===null || Math.abs(r.total-prevTotal)>1e-9) place=i+1; prevTotal=r.total;
     body.append(el("div",{class:"srow"+(place===1&&r.total>0?" first":"")},
       el("div",{class:"r",text:String(place)}),
-      el("div",null, el("div",{class:"n",text:r.c.name}), el("div",{class:"t",text:"This week so far: "+fmtPts(r.week)})),
+      el("div",null, el("div",{class:"n",text:r.c.name}), el("div",{class:"t",text:"This week so far: "+fmtPts(r.week)+" \u00b7 "+streakText(current, r.c)}), dayDots(current, r.c)),
       el("div",{class:"p",text:fmtPts(r.total)})
     ));
   });

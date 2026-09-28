@@ -34,6 +34,7 @@ Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.scri
 - **Per-class weights**: `config.weights` is the default; `config.classWeights[classId]` overrides it for one class. A class's weekly score is the weighted average of its category points; season points sum weekly scores.
 - The Class scores chart shows every week with data up to the week being viewed, across all seasons, with a dashed "<season> starts" line at each season start. Weeks before the first season never earn points. "Start new season this week" asks for confirmation (it ends the current season); changing when a season starts is the date box.
 - Classes flagged `iep` (shown as "personal best track") don't compete with the others; they're compared against their own previous week.
+- **Behavior streak multiplier** (`STREAK`, `streakInfo`): a perfect behavior week (every school day earned; days marked "x" = no school are skipped) raises the class's streak level by 1 (cap 5); a week with a missed day, or a past week left incomplete, drops it by 1 (soft reset). A perfect week's whole weekly score is multiplied by 1.10^level (x1.10 … x1.61). Levels restart each season. `dayStreak` counts earned days in a row for display; `dayDots` draws the last two weeks as squares on Standings and the projector, and Class scores has a "Behavior by day" view (`behaviorBoard`, last four weeks). Behavior day buttons cycle blank → earned → missed → no school.
 - Seasons: `config.season` plus `config.pastSeasons` (with recorded champion).
 
 ## Look
