@@ -32,7 +32,7 @@ Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.scri
 - **Perfect levels tie for first** (`PERFECT`): homework ≥ 95%, every behavior day earned, 0 absences, 0 tardies. Ties share averaged rank points.
 - **Missing quiz scores count as zero**: pasted scores are averaged over `max(scores pasted, class size)`. Class size can change mid-year via `sizeChanges` without affecting earlier weeks.
 - **Per-class weights**: `config.weights` is the default; `config.classWeights[classId]` overrides it for one class. A class's weekly score is the weighted average of its category points; season points sum weekly scores.
-- The Class scores chart for the first season also shows preseason weeks (before the season start), with a "Season starts" marker; those weeks never earn season points.
+- The Class scores chart shows every week with data up to the week being viewed, across all seasons, with a dashed "<season> starts" line at each season start. Weeks before the first season never earn points. "Start new season this week" asks for confirmation (it ends the current season); changing when a season starts is the date box.
 - Classes flagged `iep` (shown as "personal best track") don't compete with the others; they're compared against their own last-4-week average.
 - Seasons: `config.season` plus `config.pastSeasons` (with recorded champion).
 

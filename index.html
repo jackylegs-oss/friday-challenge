@@ -244,7 +244,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-09-27b";
+const APP_VERSION = "2026-09-27c";
 const DAYS = ["M","T","W","Th","F"];
 // A class at one of these levels can't really improve, so it ties for first in that category.
 const PERFECT = {
@@ -744,6 +744,7 @@ function renderSettings(){
     const nm = newName.value.trim(); if(!nm){ newName.focus(); return; }
     const start = thisMonday();
     if(start<=config.season.start){ newName.value=""; newName.placeholder="This season only just started"; return; }
+    if(!confirm("End "+config.season.name+" now and start "+nm+" on the "+fmtWeek(start).replace("Week","week")+"?\n\n"+config.season.name+"'s champion gets recorded and the standings reset to zero. To just change when the current season starts, cancel and use the date box above instead.")) return;
     const totals = seasonTotals(addWeeks(start,-1)); const champ = comp().slice().sort((a,b)=>totals[b.id]-totals[a.id])[0];
     config.pastSeasons = (config.pastSeasons||[]).concat([{name:config.season.name, start:config.season.start, champion: champ?champ.name:""}]);
     config.season = {name:nm, start};
@@ -782,14 +783,14 @@ const chart = {metric:"quiz", cls:"all", others:false, view:"standings"};
 function shortWeek(w){ const d=parseIso(w); return "Wk of "+d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
 function seriesData(metric){
   const field = metric==="quiz" ? "quiz" : "hw";
-  // The first season's chart also shows preseason weeks, so classes can see where they started.
-  const sn = seasonFor(current), first = sn.start===allSeasons()[0].start;
-  const range = first ? Object.keys(weeks).filter(w=>w<=current && (!sn.next || w<sn.next)).sort() : seasonWeeks(current);
-  const wks = range.filter(w=>config.classes.some(c=>num(entry(w,c.id)[field])!==null));
+  // Every week up to the one being viewed, across seasons, so classes always see their whole history.
+  const wks = Object.keys(weeks).filter(w=>w<=current).sort()
+    .filter(w=>config.classes.some(c=>num(entry(w,c.id)[field])!==null));
   const labels = wks.map(w=>(weeks[w] && weeks[w][metric+"Name"]) || shortWeek(w));
   const series = config.classes.map(c=>({c, vals: wks.map(w=> metric==="quiz" ? quizAvg(w,c) : num(entry(w,c.id)[field]))}));
-  const startIdx = wks.findIndex(w=>w>=sn.start);
-  return {wks, labels, series, seasonIdx: startIdx>0 ? startIdx : null};
+  // A dashed line where each season starts.
+  const starts = allSeasons().map(s=>({name:s.name, idx: wks.findIndex(w=>w>=s.start)})).filter(s=>s.idx>0);
+  return {wks, labels, series, starts};
 }
 function changeFor(data, cid){
   const s = data.series.find(x=>x.c.id===cid); if(!s) return null;
@@ -829,12 +830,11 @@ function drawChart(data, big){
   data.labels.forEach((lb,i)=>{ if(i%every && i!==n-1) return;
     const txt = lb.length>20 ? lb.slice(0,19)+"…" : lb;
     svg.append(sv("text",{x:x(i),y:H-P.b+fs*1.8,"text-anchor":(n>1&&i===0)?"start":(n>1&&i===n-1)?"end":"middle","font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif"},txt)); });
-  if(data.seasonIdx!==null){
-    const sx = (x(data.seasonIdx-1)+x(data.seasonIdx))/2;
+  data.starts.forEach(s=>{
+    const sx = (x(s.idx-1)+x(s.idx))/2;
     svg.append(sv("line",{x1:sx,x2:sx,y1:P.t,y2:P.t+ph,stroke:"var(--c-text)","stroke-width":1.5,"stroke-dasharray":"5 5"}));
-    svg.append(sv("text",{x:sx+6,y:P.t-10,"font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif","font-weight":"600"},"Season starts"));
-    svg.append(sv("text",{x:sx-6,y:P.t-10,"text-anchor":"end","font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif"},"Preseason"));
-  }
+    svg.append(sv("text",{x:sx+6,y:P.t-10,"font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif","font-weight":"600"},s.name+" starts"));
+  });
   const ordered = visible.slice().sort((a,b)=>(a.c.id===chart.cls)-(b.c.id===chart.cls));
   ordered.forEach(s=>{
     const idx = config.classes.indexOf(s.c);
