@@ -174,6 +174,17 @@ table.entry{border-collapse:collapse;width:100%;min-width:760px}
 .srow .t{font-size:clamp(14px,1.7vw,22px);opacity:.8;margin-top:.3em}
 .srow .p{font-family:var(--num);font-weight:700;font-size:clamp(40px,7vw,104px);line-height:1}
 #show .close{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);right:18px;background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:10px;padding:8px 14px}
+.cmp .hdr,.cmp .rw{display:grid;grid-template-columns:minmax(110px,1fr) 1.3fr 1.3fr;gap:4vw;align-items:center}
+.cmp .hdr{font-size:clamp(14px,1.6vw,22px);opacity:.8;padding-bottom:1vh}
+.cmp .rw{padding:1.8vh 0;border-top:2px solid rgba(255,255,255,.18)}
+.cmp .n{font-size:clamp(22px,3.4vw,50px);font-weight:700;line-height:1.05}
+.cmp .v{font-family:var(--num);font-weight:700;font-size:clamp(34px,5vw,78px);line-height:1}
+.cmp .v.top{color:var(--gold)}
+.cmp .mb{position:relative;height:clamp(6px,.9vh,11px);background:rgba(255,255,255,.15);border-radius:6px;margin-top:.6em}
+.cmp .mb i{display:block;height:100%;background:rgba(255,255,255,.75);border-radius:6px}
+.cmp .mb.top i{background:var(--gold)}
+.cmp .mb b{position:absolute;top:-5px;bottom:-5px;width:3px;background:#fff;border-radius:2px}
+.cmp .g{font-size:clamp(13px,1.5vw,22px);opacity:.85;margin-top:.45em}
 #show .iepline{margin-top:3vh;font-size:clamp(16px,2vw,28px);color:var(--gold-soft)}
 @media (prefers-color-scheme: dark){ #show .iepline{color:#F3DFB2} }
 
@@ -244,7 +255,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-09-27c";
+const APP_VERSION = "2026-09-27d";
 const DAYS = ["M","T","W","Th","F"];
 // A class at one of these levels can't really improve, so it ties for first in that category.
 const PERFECT = {
@@ -882,13 +893,44 @@ function renderTrends(){
   if(document.getElementById("show").classList.contains("on")) renderShow();
 }
 
+// Actual quiz and homework averages side by side, with the goal each class is chasing this week
+// (its own last-four-week average, the same number growth scoring compares against).
+function compareBoard(){
+  const upTo = Object.keys(weeks).filter(w=>w<=current);
+  const avg = a=>a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+  const stats = config.classes.map(c=>{
+    const q = upTo.map(w=>quizAvg(w,c)).filter(v=>v!==null);
+    const h = upTo.map(w=>num(entry(w,c.id).hw)).filter(v=>v!==null);
+    return {c, quiz:avg(q), hw:avg(h), quizGoal:priorAvg(current,c,"quiz",4), hwGoal:priorAvg(current,c,"hw",4)};
+  });
+  const best = k=>Math.max(...stats.map(s=>s[k]===null?-1:s[k]));
+  const top = {quiz:best("quiz"), hw:best("hw")};
+  const pct = v=>v===null ? "–" : (Math.round(v*10)/10).toFixed(1)+"%";
+  const cell = (s,k)=>{
+    const v = s[k], g = s[k+"Goal"], isTop = v!==null && Math.abs(v-top[k])<1e-9;
+    const bar = el("div",{class:"mb"+(isTop?" top":"")}, el("i",{style:"width:"+Math.max(0,Math.min(100,v||0))+"%"}));
+    if(g!==null) bar.append(el("b",{style:"left:calc("+Math.max(0,Math.min(100,g))+"% - 1px)",title:"Goal"}));
+    return el("div",null, el("div",{class:"v"+(isTop?" top":""),text:pct(v)}), bar,
+      el("div",{class:"g",text: g===null ? "No goal yet" : "Goal this week: beat "+pct(g)}));
+  };
+  return el("div",{class:"cmp"},
+    el("div",{class:"hdr"}, el("span",{text:"Class"}), el("span",{text:"Quiz average"}), el("span",{text:"Homework turned in"})),
+    stats.map(s=>el("div",{class:"rw"}, el("div",{class:"n",text:s.c.name}), cell(s,"quiz"), cell(s,"hw"))));
+}
+
 function renderShow(){
   const body = document.getElementById("showBody"); body.replaceChildren();
-  const views = el("div",{class:"seg",role:"group","aria-label":"Scoreboard view"}, [["standings","Standings"],["trends","Class scores"]].map(([k,t])=>{ const b=el("button",{type:"button","aria-pressed":String(chart.view===k),text:t}); b.addEventListener("click",()=>{chart.view=k; renderShow();}); return b; }));
+  const views = el("div",{class:"seg",role:"group","aria-label":"Scoreboard view"}, [["standings","Standings"],["compare","Compare classes"],["trends","Class scores"]].map(([k,t])=>{ const b=el("button",{type:"button","aria-pressed":String(chart.view===k),text:t}); b.addEventListener("click",()=>{chart.view=k; renderShow();}); return b; }));
   if(chart.view==="trends"){
     const cls = config.classes.find(c=>c.id===chart.cls);
     body.append(el("div",{class:"ctrls"}, views), el("h2",{text: cls ? cls.name : "Our classes"}), el("div",{class:"wk",text: (chart.metric==="quiz"?"Quiz averages":"Homework turned in")+", "+seasonFor(current).name}));
     const c = trendsControls(()=>{ renderShow(); renderTrends(); }, true); body.append(c, trendsBody(true));
+    return;
+  }
+  if(chart.view==="compare"){
+    body.append(el("div",{class:"ctrls"}, views), el("h2",{text:"How the classes compare"}),
+      el("div",{class:"wk",text:"Real class averages from every week so far, and the number each class has to beat for the "+fmtWeek(current).replace("Week","week")}),
+      compareBoard());
     return;
   }
   body.append(el("div",{class:"ctrls"}, views));

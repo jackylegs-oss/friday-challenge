@@ -38,7 +38,7 @@ Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.scri
 
 ## Look
 
-Isibindi house colors: house green (`--house:#1E5B3C`, deep `#123826`) with gold accents (`--gold:#D9A23A`). Fonts: Graduate (display), Barlow (body), Barlow Condensed (numbers). Supports light/dark via `prefers-color-scheme` and `data-theme`. The projector view (`#show`) is a full-screen dark-green scoreboard.
+Isibindi house colors: house green (`--house:#1E5B3C`, deep `#123826`) with gold accents (`--gold:#D9A23A`). Fonts: Graduate (display), Barlow (body), Barlow Condensed (numbers). Supports light/dark via `prefers-color-scheme` and `data-theme`. The projector view (`#show`) is a full-screen dark-green scoreboard with three views: Standings, Compare classes (`compareBoard`: each class's average quiz % and homework-turned-in % over every week so far, plus "goal this week" = its last-4-week average, the number growth scoring compares against), and Class scores (the chart).
 
 ## Entering scores from reports
 
