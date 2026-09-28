@@ -257,7 +257,9 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-09-27h";
+const APP_VERSION = "2026-09-27i";
+// Growth compares each class with its own most recent earlier week that has a number (week over week).
+const GROWTH_WEEKS = 1;
 const DAYS = ["M","T","W","Th","F"];
 // A class at one of these levels can't really improve, so it ties for first in that category.
 const PERFECT = {
@@ -407,7 +409,7 @@ function weekResult(wk){
     const perfect = {};
     const test = PERFECT[cat.key];
     have.forEach((c,i)=>{ if(test && test(vals[i])) perfect[c.id]=true; });
-    const priors = have.map(c=>priorAvg(wk,c,cat.key,4));
+    const priors = have.map(c=>priorAvg(wk,c,cat.key,GROWTH_WEEKS));
     if(priors.every(p=>p!==null)){ vals = vals.map((v,i)=>v-priors[i]); mode="growth"; }
     // average ranks for ties; perfect classes tie for first
     const order = have.map((c,i)=>({c,v: perfect[c.id] ? Infinity : vals[i]*cat.dir})).sort((a,b)=>(a.v===b.v)?0:(b.v>a.v?1:-1));
@@ -432,7 +434,10 @@ function allSeasons(){
   return list.map((x,i)=>({name:x.name, start:x.start, next: list[i+1] ? list[i+1].start : null}));
 }
 function seasonFor(wk){
-  const L = allSeasons(); let found = L[0];
+  const L = allSeasons();
+  // Weeks before the first season are their own "Preseason": they show standings but never add to a season.
+  if(wk < L[0].start) return {name:"Preseason", start:"0000-00-00", next:L[0].start, pre:true, first:L[0]};
+  let found = L[0];
   L.forEach(x=>{ if(wk>=x.start) found = x; });
   return found;
 }
@@ -449,7 +454,7 @@ function iepWeek(wk, cls){
   let wsum=0, won=0; const cats={};
   CATS.forEach(cat=>{
     const w = wOf(cls.id, cat.key); const v = metric(wk,cls,cat.key);
-    const p = priorAvg(wk,cls,cat.key,4);
+    const p = priorAvg(wk,cls,cat.key,GROWTH_WEEKS);
     if(v===null || p===null){ cats[cat.key]=null; return; }
     const better = cat.dir*(v-p) >= -1e-9; cats[cat.key]=better;
     if(w>0){ wsum+=w; if(better) won+=w; }
@@ -479,7 +484,7 @@ function sortedStandings(){
 
 function renderHeader(){
   document.getElementById("wkLabel").replaceChildren(fmtWeek(current), el("small",{text: current===iso(mondayOf(new Date())) ? "This week" : (current>iso(mondayOf(new Date()))?"Upcoming":"Past week")}));
-  document.getElementById("seasonLine").textContent = "Mr. Johnson's classes, " + seasonFor(current).name + " season";
+  document.getElementById("seasonLine").textContent = "Mr. Johnson's classes, " + (seasonFor(current).pre ? "Preseason" : seasonFor(current).name + " season");
 }
 
 function renderStandings(){
@@ -504,7 +509,7 @@ function renderStandings(){
         el("div",{class:"bar"}, el("i",{style:"width:"+Math.max(2,(r.total/max)*100)+"%"})),
         el("div",{class:"chips"}, chips.length?chips:[el("span",{class:"chip",text:"Nothing entered yet this week"})])
       ),
-      el("div",{class:"pts"}, el("b",{text:fmtPts(r.total)}), el("small",{text:"season points"}), el("small",{text:"This week: "+fmtPts(r.week)}))
+      el("div",{class:"pts"}, el("b",{text:fmtPts(r.total)}), el("small",{text: seasonFor(current).pre ? "preseason points" : "season points"}), el("small",{text:"This week: "+fmtPts(r.week)}))
     ));
   });
   const lb = lastBackup();
@@ -514,9 +519,9 @@ function renderStandings(){
   }
   // Weeks before the season starts are practice: they feed the baseline but never add season points.
   const sn = seasonFor(current);
-  if(current < sn.start){
-    const go = el("button",{class:"linkbtn",type:"button",text:"Go to the "+fmtWeek(sn.start).replace("Week","week")}); go.addEventListener("click",()=>{ current = sn.start; render(); });
-    root.append(el("div",{class:"nudge"}, el("span",{text:"This is a preseason week. Its numbers count toward each class's baseline and “This week” below, but "+sn.name+" season points start the "+fmtWeek(sn.start).replace("Week","week")+". "}), go));
+  if(sn.pre){
+    const go = el("button",{class:"linkbtn",type:"button",text:"Go to the "+fmtWeek(sn.next).replace("Week","week")}); go.addEventListener("click",()=>{ current = sn.next; render(); });
+    root.append(el("div",{class:"nudge"}, el("span",{text:"Preseason week. These points are for practice and don't carry over. "+sn.first.name+" starts from zero the "+fmtWeek(sn.next).replace("Week","week")+". "}), go));
   }
   root.append(board);
 
@@ -530,7 +535,7 @@ function renderStandings(){
     : "All categories are in for this week."}));
   const rawCats = CATS.filter(c=>wr.cats[c.key] && wr.cats[c.key].mode==="raw").map(c=>c.short.toLowerCase());
   const growCats = CATS.filter(c=>wr.cats[c.key] && wr.cats[c.key].mode==="growth");
-  if(growCats.length) root.append(el("p",{class:"note",text:"Every category is ranked on growth: how much each class improved on its own average from the last four weeks. A class at a perfect level (95% or more homework, every behavior day earned, no unexcused absences, or no tardies) ties for first in that category."}));
+  if(growCats.length) root.append(el("p",{class:"note",text:"Every category is ranked on growth: how much each class improved on its own previous week (for quizzes, its last quiz). A class at a perfect level (95% or more homework, every behavior day earned, no unexcused absences, or no tardies) ties for first in that category."}));
   if(rawCats.length) root.append(el("p",{class:"note",text:"Ranked on this week's raw numbers for now: "+rawCats.join(", ")+". At least one class has no earlier week to compare against yet, so growth scoring for these starts next week."}));
 
   iepClasses().forEach(cls=>{
@@ -542,7 +547,7 @@ function renderStandings(){
       el("h3",{text: cls.name+": Personal best track"}),
       el("div",{class:"muted", text: r.pct===null
         ? "Building a baseline. This class competes against its own past weeks, so it needs at least one earlier week of numbers."
-        : "Beat or matched their own average on "+Math.round(r.pct*100)+"% of the weighted categories this week. Personal-best weeks this season: "+seasonWins+"."}),
+        : "Beat or matched their previous week on "+Math.round(r.pct*100)+"% of the weighted categories this week. Personal-best weeks this season: "+seasonWins+"."}),
       cats.length? el("div",{class:"grid"}, cats) : null
     ));
   });
@@ -947,14 +952,14 @@ function renderTrends(){
 }
 
 // Actual quiz and homework averages side by side, with the goal each class is chasing this week
-// (its own last-four-week average, the same number growth scoring compares against).
+// (its own previous week's number, the same one growth scoring compares against).
 function compareBoard(){
   const upTo = Object.keys(weeks).filter(w=>w<=current);
   const avg = a=>a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
   const stats = config.classes.map(c=>{
     const q = upTo.map(w=>quizAvg(w,c)).filter(v=>v!==null);
     const h = upTo.map(w=>num(entry(w,c.id).hw)).filter(v=>v!==null);
-    return {c, quiz:avg(q), hw:avg(h), quizGoal:priorAvg(current,c,"quiz",4), hwGoal:priorAvg(current,c,"hw",4)};
+    return {c, quiz:avg(q), hw:avg(h), quizGoal:priorAvg(current,c,"quiz",GROWTH_WEEKS), hwGoal:priorAvg(current,c,"hw",GROWTH_WEEKS)};
   });
   const best = k=>Math.max(...stats.map(s=>s[k]===null?-1:s[k]));
   const top = {quiz:best("quiz"), hw:best("hw")};
@@ -1000,7 +1005,7 @@ function renderShow(){
   });
   iepClasses().forEach(cls=>{
     const r = iepWeek(current, cls);
-    if(r.pct!==null) body.append(el("div",{class:"iepline",text: cls.name+" beat its own average on "+Math.round(r.pct*100)+"% of categories this week."}));
+    if(r.pct!==null) body.append(el("div",{class:"iepline",text: cls.name+" beat its previous week on "+Math.round(r.pct*100)+"% of categories this week."}));
   });
 }
 

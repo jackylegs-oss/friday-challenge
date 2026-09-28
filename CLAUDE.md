@@ -27,18 +27,18 @@ Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.scri
 ## Scoring
 
 - Six categories (`CATS`): quiz growth (`quiz`), homework turned in (`hw`), behavior (`behavior`, M–F earned/missed taps), house points (`house`), unexcused absences (`attendance`, field `abs`), tardies (`tardy`). Absences and tardies are lower-is-better (`dir:-1`). House points, absences and tardies are divided by class size.
-- Each category is ranked on **growth**: this week's value minus the class's average over its last 4 prior weeks with data. If any class lacks prior data for a category, that category falls back to raw ranking that week.
-- A category counts as soon as two competing classes have a number in it; points stay on the 5..1 scale (N - average rank) and classes still missing get no points for it yet, so standings update live as numbers are entered. Weeks before the season start show a preseason notice.
+- Each category is ranked on **growth, week over week** (`GROWTH_WEEKS = 1`): this week's value minus the class's most recent earlier week with a number (for quizzes, its last quiz). If any class in the ranking lacks an earlier week, that category falls back to raw ranking that week.
+- A category counts as soon as two competing classes have a number in it; points stay on the 5..1 scale (N - average rank) and classes still missing get no points for it yet, so standings update live as numbers are entered. Weeks before the first season are a "Preseason" pseudo-season (`seasonFor` returns `pre:true`): they show their own preseason points and a notice, and never add to a real season.
 - **Perfect levels tie for first** (`PERFECT`): homework ≥ 95%, every behavior day earned, 0 absences, 0 tardies. Ties share averaged rank points.
 - **Missing quiz scores count as zero**: pasted scores are averaged over `max(scores pasted, class size)`. Class size can change mid-year via `sizeChanges` without affecting earlier weeks.
 - **Per-class weights**: `config.weights` is the default; `config.classWeights[classId]` overrides it for one class. A class's weekly score is the weighted average of its category points; season points sum weekly scores.
 - The Class scores chart shows every week with data up to the week being viewed, across all seasons, with a dashed "<season> starts" line at each season start. Weeks before the first season never earn points. "Start new season this week" asks for confirmation (it ends the current season); changing when a season starts is the date box.
-- Classes flagged `iep` (shown as "personal best track") don't compete with the others; they're compared against their own last-4-week average.
+- Classes flagged `iep` (shown as "personal best track") don't compete with the others; they're compared against their own previous week.
 - Seasons: `config.season` plus `config.pastSeasons` (with recorded champion).
 
 ## Look
 
-Isibindi house colors: house green (`--house:#1E5B3C`, deep `#123826`) with gold accents (`--gold:#D9A23A`). Fonts: Graduate (display), Barlow (body), Barlow Condensed (numbers). Supports light/dark via `prefers-color-scheme` and `data-theme`. The projector view (`#show`) is a full-screen dark-green scoreboard with three views: Standings, Compare classes (`compareBoard`: each class's average quiz % and homework-turned-in % over every week so far, plus "goal this week" = its last-4-week average, the number growth scoring compares against), and Class scores (the chart).
+Isibindi house colors: house green (`--house:#1E5B3C`, deep `#123826`) with gold accents (`--gold:#D9A23A`). Fonts: Graduate (display), Barlow (body), Barlow Condensed (numbers). Supports light/dark via `prefers-color-scheme` and `data-theme`. The projector view (`#show`) is a full-screen dark-green scoreboard with three views: Standings, Compare classes (`compareBoard`: each class's average quiz % and homework-turned-in % over every week so far, plus "goal this week" = its previous week's number, the one growth scoring compares against), and Class scores (the chart).
 
 ## Updating from the Google Sheet (preferred)
 
