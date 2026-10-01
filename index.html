@@ -123,6 +123,8 @@ table.entry{border-collapse:collapse;width:100%;min-width:760px}
 .sizechoice{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-2px 0 12px;padding:10px 12px;border:1px solid var(--gold);border-radius:10px;background:var(--gold-soft)}
 .linkbtn{border:0;background:transparent;color:var(--house);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .ownw{font-size:14px;color:var(--slate);margin-top:2px}
+.fmtline{font-size:13px;color:var(--slate);margin:-2px 0 12px}
+.fmtline .linkbtn{font-size:13px;padding:0}
 .ownlbl{display:flex;align-items:center;gap:8px;font-weight:600;margin:0 0 14px}
 .importmsg{font-weight:600;color:var(--house)}
 .sheetmsg{margin:12px 0 0;padding-left:20px;font-size:14px;white-space:pre-wrap}
@@ -282,7 +284,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-10-01a";
+const APP_VERSION = "2026-10-01b";
 // Growth compares each class with its own most recent earlier week that has a number (week over week).
 const GROWTH_WEEKS = 1;
 const DAYS = ["M","T","W","Th","F"];
@@ -411,8 +413,14 @@ function quizInfo(wk, cls){
 }
 function quizAvg(wk, cls){ const i = quizInfo(wk, cls); return i ? i.avg : null; }
 function priorWeeks(wk){ return Object.keys(weeks).filter(w=>w<wk).sort(); }
+// When a class's quiz format changes (e.g. Period 4's half-length quizzes), its comparison restarts:
+// weeks before the restart never count as that class's "previous week" for that category.
+function restartFor(cls, key, wk){
+  return (cls.restarts||[]).filter(r=>r.key===key && r.from<=wk).map(r=>r.from).sort().pop() || null;
+}
 function priorAvg(wk, cls, key, max){
-  const vals = priorWeeks(wk).map(w=>metric(w,cls,key)).filter(v=>v!==null);
+  const from = restartFor(cls, key, wk);
+  const vals = priorWeeks(wk).filter(w=>!from || w>=from).map(w=>metric(w,cls,key)).filter(v=>v!==null);
   const use = max ? vals.slice(-max) : vals;
   return use.length ? use.reduce((a,b)=>a+b,0)/use.length : null;
 }
@@ -484,7 +492,8 @@ function streakText(wk, cls){
    perfect level doesn't count yet. The weekly score is the weighted average of the categories that
    count, and a perfect behavior week multiplies a positive score by the streak multiplier.
    Whoever has the highest weekly score improved the most and wins the week. */
-const GROWTH = {scale:{quiz:1, hw:1, behavior:100, house:10, attendance:100, tardy:100}, perfect:10};
+// cap: no single category can move a class's score more than 15 points either way in one week.
+const GROWTH = {scale:{quiz:1, hw:1, behavior:100, house:10, attendance:100, tardy:100}, perfect:10, cap:15};
 function catGrowth(wk, cls, cat){
   const v = metric(wk, cls, cat.key);
   if(v===null) return null;
@@ -492,7 +501,10 @@ function catGrowth(wk, cls, cat){
   const perfect = !!(PERFECT[cat.key] && PERFECT[cat.key](v));
   let growth = prev===null ? null : (v-prev)*cat.dir*GROWTH.scale[cat.key];
   if(perfect) growth = Math.max(growth===null ? -Infinity : growth, GROWTH.perfect);
-  return {v, prev, perfect, growth};
+  const raw = growth;
+  if(growth!==null) growth = Math.max(-GROWTH.cap, Math.min(GROWTH.cap, growth));
+  const restarted = prev===null && !!restartFor(cls, cat.key, wk) && restartFor(cls, cat.key, wk)===wk;
+  return {v, prev, perfect, growth, capped: raw!==null && raw!==growth, restarted};
 }
 function weekResult(wk){
   const cs = comp();
@@ -593,8 +605,8 @@ function renderStandings(){
     if(prevTotal===null || Math.abs(r.total-prevTotal)>1e-9) place=i+1; prevTotal=r.total;
     const chips = CATS.filter(cat=>wr.detail[r.c.id][cat.key] && wOf(r.c.id, cat.key)>0).map(cat=>{
       const g = wr.detail[r.c.id][cat.key];
-      const txt = g.growth===null ? cat.short+": first week" : cat.short+" "+fmtSigned(g.growth)+(g.perfect?" (perfect)":"");
-      return el("span",{class:"chip"+(g.growth!==null && g.growth>0 ? " top":""), title: g.prev===null ? "No earlier week to compare yet" : "This week "+fmtRaw(cat.key,g.v)+", previous "+fmtRaw(cat.key,g.prev), text: txt});
+      const txt = g.growth===null ? cat.short+(g.restarted?": new format, first week":": first week") : cat.short+" "+fmtSigned(g.growth)+(g.perfect?" (perfect)":"")+(g.capped?" (max)":"");
+      return el("span",{class:"chip"+(g.growth!==null && g.growth>0 ? " top":""), title: g.prev===null ? (g.restarted ? "Comparison restarted this week (format changed); growth counts from next week" : "No earlier week to compare yet") : "This week "+fmtRaw(cat.key,g.v)+", previous "+fmtRaw(cat.key,g.prev)+(g.capped?" (capped at \u00b1"+GROWTH.cap+")":""), text: txt});
     });
     board.append(el("div",{class:"row"+(place===1&&r.total>0?" first":"")},
       el("div",{class:"rank", text:String(place)}),
@@ -815,7 +827,16 @@ function renderSettings(){
       cancel.addEventListener("click",()=>{ size.value = nowSize; choice.hidden = true; });
       const iep = el("input",Object.assign({type:"checkbox", "aria-label":"Compete against own past weeks"},dis)); iep.checked = !!c.iep;
       iep.addEventListener("change",()=>{ c.iep = iep.checked; saveConfig(); render(); });
-      return el("div",null, el("div",{class:"crow"}, name, size, el("label",null, iep)), choice);
+      const rq = (c.restarts||[]).filter(r=>r.key==="quiz").map(r=>r.from).sort();
+      const fmtBtn = el("button",Object.assign({class:"linkbtn",type:"button",text:"Quiz format changed the "+fmtWeek(current).replace("Week","week")},dis));
+      fmtBtn.addEventListener("click",()=>{
+        if(!confirm(c.name+"'s quizzes changed format the "+fmtWeek(current).replace("Week","week")+"?\n\nThat week counts as their first week on the new format (no quiz growth), and from the next quiz on they're compared with the new format only.")) return;
+        c.restarts = (c.restarts||[]).filter(r=>!(r.key==="quiz" && r.from===current)).concat([{key:"quiz", from:current}]); saveConfig(); render();
+      });
+      const fmtInfo = el("div",{class:"fmtline"}, rq.length ? "Quiz comparison restarted: "+rq.map(f=>fmtWeek(f).replace("Week of ","")).join(", ")+" " : null,
+        rq.length ? (()=>{ const u = el("button",Object.assign({class:"linkbtn",type:"button",text:"Undo latest"},dis)); u.addEventListener("click",()=>{ const last = rq[rq.length-1]; c.restarts = (c.restarts||[]).filter(r=>!(r.key==="quiz" && r.from===last)); saveConfig(); render(); }); return u; })() : null,
+        rq.length ? " \u00b7 " : null, fmtBtn);
+      return el("div",null, el("div",{class:"crow"}, name, size, el("label",null, iep)), fmtInfo, choice);
     }),
     el("p",{class:"muted",text:"Class size is used to count missing quiz scores as zero and to turn house points, absences, and tardies into per-student rates. When enrollment changes mid-year, choose \u201cEnrollment changed this week\u201d so earlier weeks keep the old number. Classes on the personal best track compete against their own past weeks instead of the other sections."})
   );
