@@ -282,11 +282,11 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-09-27j";
+const APP_VERSION = "2026-10-01a";
 // Growth compares each class with its own most recent earlier week that has a number (week over week).
 const GROWTH_WEEKS = 1;
 const DAYS = ["M","T","W","Th","F"];
-// A class at one of these levels can't really improve, so it ties for first in that category.
+// A class at one of these levels can't really improve, so holding it earns full credit (GROWTH.perfect).
 const PERFECT = {
   hw: v=>v>=95,
   behavior: v=>v>=1,
@@ -472,40 +472,48 @@ function streakText(wk, cls){
   return parts.join(" \u00b7 ");
 }
 
-// rank competitive classes for one week
+/* ---------- weekly scoring ----------
+   Every class is scored only on its own numbers. For each category:
+     growth points = (this week - its own previous week) x scale, flipped for absences and tardies.
+   The scales put every category in roughly "percentage points of the class":
+     quiz %, homework %, and % of behavior days earned count 1 point per point;
+     unexcused absences and tardies count 1 point per 1% of the class (one fewer tardy in a class of 25 = +4);
+     house points count 10 points per extra house point per student.
+   Holding a perfect level (95%+ homework, every behavior day earned, 0 absences, 0 tardies) earns at
+   least GROWTH.perfect points, even without an earlier week. A category with no earlier week and no
+   perfect level doesn't count yet. The weekly score is the weighted average of the categories that
+   count, and a perfect behavior week multiplies a positive score by the streak multiplier.
+   Whoever has the highest weekly score improved the most and wins the week. */
+const GROWTH = {scale:{quiz:1, hw:1, behavior:100, house:10, attendance:100, tardy:100}, perfect:10};
+function catGrowth(wk, cls, cat){
+  const v = metric(wk, cls, cat.key);
+  if(v===null) return null;
+  const prev = priorAvg(wk, cls, cat.key, GROWTH_WEEKS);
+  const perfect = !!(PERFECT[cat.key] && PERFECT[cat.key](v));
+  let growth = prev===null ? null : (v-prev)*cat.dir*GROWTH.scale[cat.key];
+  if(perfect) growth = Math.max(growth===null ? -Infinity : growth, GROWTH.perfect);
+  return {v, prev, perfect, growth};
+}
 function weekResult(wk){
-  const cs = comp(); const n = cs.length;
-  const out = {cats:{}, score:{}, included:[]};
-  cs.forEach(c=>out.score[c.id]=null);
-  if(n<2) return out;
-  const wsum = {}; const totals = {}; cs.forEach(c=>{ totals[c.id]=0; wsum[c.id]=0; });
-  CATS.forEach(cat=>{
-    // A category counts as soon as two classes have a number; the rest join in when theirs are entered.
-    const have = cs.filter(c=>metric(wk,c,cat.key)!==null);
-    const waiting = cs.filter(c=>!have.includes(c));
-    if(have.length<2) { out.cats[cat.key]=null; return; }
-    let vals = have.map(c=>metric(wk,c,cat.key));
-    let mode = "raw";
-    const perfect = {};
-    const test = PERFECT[cat.key];
-    have.forEach((c,i)=>{ if(test && test(vals[i])) perfect[c.id]=true; });
-    const priors = have.map(c=>priorAvg(wk,c,cat.key,GROWTH_WEEKS));
-    if(priors.every(p=>p!==null)){ vals = vals.map((v,i)=>v-priors[i]); mode="growth"; }
-    // average ranks for ties; perfect classes tie for first
-    const order = have.map((c,i)=>({c,v: perfect[c.id] ? Infinity : vals[i]*cat.dir})).sort((a,b)=>(a.v===b.v)?0:(b.v>a.v?1:-1));
-    const pts = {}; const place = {};
-    let i=0;
-    while(i<order.length){
-      let j=i; while(j+1<order.length && (order[j+1].v===order[i].v || Math.abs(order[j+1].v-order[i].v)<1e-9)) j++;
-      const avgRank = (i+j)/2; // 0-based
-      for(let k=i;k<=j;k++){ pts[order[k].c.id] = n-avgRank; place[order[k].c.id]=i+1; }
-      i=j+1;
-    }
-    out.cats[cat.key] = {pts, place, mode, perfect, waiting};
-    have.forEach(c=>{ const w = wOf(c.id, cat.key); if(w>0){ wsum[c.id]+=w; totals[c.id]+=w*pts[c.id]; } });
+  const cs = comp();
+  const out = {score:{}, base:{}, mult:{}, detail:{}, place:{}};
+  cs.forEach(c=>{
+    let wsum = 0, tot = 0; const det = {};
+    CATS.forEach(cat=>{
+      const g = catGrowth(wk, c, cat); det[cat.key] = g;
+      const w = wOf(c.id, cat.key);
+      if(g && g.growth!==null && w>0){ wsum += w; tot += w*g.growth; }
+    });
+    out.detail[c.id] = det;
+    if(!wsum){ out.score[c.id] = null; return; }
+    const base = tot/wsum, m = streakInfo(wk, c).mult;
+    out.base[c.id] = base; out.mult[c.id] = m;
+    // A perfect behavior week multiplies the weekly score (compounding streak).
+    out.score[c.id] = base>0 ? base*m : base;
   });
-  // A perfect behavior week multiplies the whole weekly score (compounding streak).
-  cs.forEach(c=>{ if(wsum[c.id]>0) out.score[c.id]=totals[c.id]/wsum[c.id]*streakInfo(wk,c).mult; });
+  // Places this week are just the order of the classes' own scores.
+  const ranked = cs.filter(c=>out.score[c.id]!==null).sort((a,b)=>out.score[b.id]-out.score[a.id]);
+  ranked.forEach((c,i)=>{ const p = ranked[i-1]; out.place[c.id] = (p && Math.abs(out.score[c.id]-out.score[p.id])<1e-9) ? out.place[p.id] : i+1; });
   return out;
 }
 // Every season in order, each running until the next one starts.
@@ -543,6 +551,13 @@ function iepWeek(wk, cls){
   return {pct: wsum? won/wsum : null, cats};
 }
 function fmtPts(v){ return v===null||v===undefined ? "–" : (Math.round(v*10)/10).toFixed(1); }
+function fmtRaw(key, v){
+  if(v===null||v===undefined) return "–";
+  if(key==="behavior") return Math.round(v*100)+"% of days";
+  if(key==="house"||key==="attendance"||key==="tardy") return (Math.round(v*100)/100)+" per student";
+  return (Math.round(v*10)/10)+"%";
+}
+function fmtSigned(v){ if(v===null||v===undefined) return "–"; const r = Math.round(v*10)/10; return (r>0?"+":r<0?"\u2212":"")+Math.abs(r).toFixed(1); }
 function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
 
 /* ---------- rendering ---------- */
@@ -576,11 +591,10 @@ function renderStandings(){
   let prevTotal = null, place = 0;
   rows.forEach((r,i)=>{
     if(prevTotal===null || Math.abs(r.total-prevTotal)>1e-9) place=i+1; prevTotal=r.total;
-    const chips = CATS.filter(cat=>wr.cats[cat.key] && wr.cats[cat.key].place[r.c.id] && wOf(r.c.id, cat.key)>0).map(cat=>{
-      const pl = wr.cats[cat.key].place[r.c.id];
-      const pf = wr.cats[cat.key].perfect[r.c.id];
-      const soFar = wr.cats[cat.key].waiting.length ? " so far" : "";
-      return el("span",{class:"chip"+(pl===1?" top":""), text: cat.short+" "+ordinal(pl)+(pf?", perfect":"")+soFar});
+    const chips = CATS.filter(cat=>wr.detail[r.c.id][cat.key] && wOf(r.c.id, cat.key)>0).map(cat=>{
+      const g = wr.detail[r.c.id][cat.key];
+      const txt = g.growth===null ? cat.short+": first week" : cat.short+" "+fmtSigned(g.growth)+(g.perfect?" (perfect)":"");
+      return el("span",{class:"chip"+(g.growth!==null && g.growth>0 ? " top":""), title: g.prev===null ? "No earlier week to compare yet" : "This week "+fmtRaw(cat.key,g.v)+", previous "+fmtRaw(cat.key,g.prev), text: txt});
     });
     board.append(el("div",{class:"row"+(place===1&&r.total>0?" first":"")},
       el("div",{class:"rank", text:String(place)}),
@@ -591,7 +605,7 @@ function renderStandings(){
         el("div",{class:"chips"}, chips.length?chips:[el("span",{class:"chip",text:"Nothing entered yet this week"})], (()=>{ const st=streakInfo(current,r.c); return st.mult>1 ? el("span",{class:"chip mult",text:"Behavior streak \u00d7"+st.mult.toFixed(2)}) : null; })()),
         el("div",{class:"streakline"}, dayDots(current, r.c), el("span",{text:streakText(current, r.c)}))
       ),
-      el("div",{class:"pts"}, el("b",{text:fmtPts(r.total)}), el("small",{text: seasonFor(current).pre ? "preseason points" : "season points"}), el("small",{text:"This week: "+fmtPts(r.week)}))
+      el("div",{class:"pts"}, el("b",{text:fmtPts(r.total)}), el("small",{text: seasonFor(current).pre ? "preseason points" : "season points"}), el("small",{text:"This week: "+fmtSigned(r.week)+(wr.place[r.c.id] ? " ("+ordinal(wr.place[r.c.id])+")" : "")}))
     ));
   });
   const lb = lastBackup();
@@ -608,17 +622,14 @@ function renderStandings(){
   root.append(board);
 
   const waiting = CATS.filter(cat=>comp().some(c=>wOf(c.id, cat.key)>0)).map(cat=>{
-    const r = wr.cats[cat.key];
-    if(!r) return cat.short.toLowerCase();
-    return r.waiting.length ? cat.short.toLowerCase()+" for "+r.waiting.map(c=>c.name).join(", ") : null;
+    const missing = comp().filter(c=>wOf(c.id, cat.key)>0 && !wr.detail[c.id][cat.key]);
+    if(!missing.length) return null;
+    return missing.length===comp().length ? cat.short.toLowerCase() : cat.short.toLowerCase()+" for "+missing.map(c=>c.name).join(", ");
   }).filter(Boolean);
   root.append(el("p",{class:"note", text: waiting.length
-    ? "This week so far. Still waiting on: "+waiting.join("; ")+". Each category counts as soon as two classes have a number, and scores update as you enter the rest."
+    ? "This week so far. Still waiting on: "+waiting.join("; ")+"."
     : "All categories are in for this week."}));
-  const rawCats = CATS.filter(c=>wr.cats[c.key] && wr.cats[c.key].mode==="raw").map(c=>c.short.toLowerCase());
-  const growCats = CATS.filter(c=>wr.cats[c.key] && wr.cats[c.key].mode==="growth");
-  if(growCats.length) root.append(el("p",{class:"note",text:"Every category is ranked on growth: how much each class improved on its own previous week (for quizzes, its last quiz). A class at a perfect level (95% or more homework, every behavior day earned, no unexcused absences, or no tardies) ties for first in that category."}));
-  if(rawCats.length) root.append(el("p",{class:"note",text:"Ranked on this week's raw numbers for now: "+rawCats.join(", ")+". At least one class has no earlier week to compare against yet, so growth scoring for these starts next week."}));
+  root.append(el("p",{class:"note",text:"Each class is scored only against itself: every category compares this week with that class's own previous week (for quizzes, its last quiz), so changing one class's numbers never changes another class's score. The class that improved the most wins the week. Holding a perfect level (95%+ homework, every behavior day earned, no unexcused absences, or no tardies) earns +10. Hover a chip to see this week's and last week's numbers."}));
 
   iepClasses().forEach(cls=>{
     const r = iepWeek(current, cls);
@@ -1104,7 +1115,7 @@ function renderShow(){
     if(prevTotal===null || Math.abs(r.total-prevTotal)>1e-9) place=i+1; prevTotal=r.total;
     body.append(el("div",{class:"srow"+(place===1&&r.total>0?" first":"")},
       el("div",{class:"r",text:String(place)}),
-      el("div",null, el("div",{class:"n",text:r.c.name}), el("div",{class:"t",text:"This week so far: "+fmtPts(r.week)+" \u00b7 "+streakText(current, r.c)}), dayDots(current, r.c)),
+      el("div",null, el("div",{class:"n",text:r.c.name}), el("div",{class:"t",text:"This week so far: "+fmtSigned(r.week)+" \u00b7 "+streakText(current, r.c)}), dayDots(current, r.c)),
       el("div",{class:"p",text:fmtPts(r.total)})
     ));
   });

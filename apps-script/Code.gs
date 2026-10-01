@@ -70,6 +70,9 @@ function loadAll() {
  * ------------------------------------------------------------ */
 
 var SKIP_NAME = 'Skip';
+// From this Monday on, an update only changes the current week's quiz and homework numbers;
+// every earlier week stays exactly as it was (locked). Attendance is never locked.
+var LOCK_FROM = '2026-10-05';
 var ATTENDANCE_NAME = 'Attendance';
 
 function updateFromGradebooks() {
@@ -83,6 +86,9 @@ function updateFromGradebooks() {
     var classes = config.classes;
     var skip = readSkip_();
     var tabs = ss.getSheets();
+    var thisWeek = mondayOf_(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+    var lockBefore = thisWeek >= LOCK_FROM ? thisWeek : null;
+    var lockedSkips = 0;
     var lines = [];
     var updates = {}; // weekId -> {names: {...}, entries: {cid: {...}}}
     var touch = function (wk) { return updates[wk] || (updates[wk] = { names: {}, entries: {} }); };
@@ -95,6 +101,7 @@ function updateFromGradebooks() {
       catch (e) { lines.push(cls.name + ': ' + e.message); return; }
       var q = 0, h = 0;
       Object.keys(res.weeks).forEach(function (wk) {
+        if (lockBefore && wk < lockBefore) { lockedSkips++; return; }
         var w = res.weeks[wk], u = touch(wk), e = u.entries[cls.id] || (u.entries[cls.id] = {});
         if (w.quiz !== undefined) { e.quiz = w.quiz; q++; if (!u.names.quizName) u.names.quizName = w.quizName; }
         if (w.hw !== undefined) { e.hw = w.hw; h++; if (!u.names.hwName) u.names.hwName = w.hwName; }
@@ -102,6 +109,8 @@ function updateFromGradebooks() {
       lines.push(cls.name + ': ' + q + ' quiz week' + (q === 1 ? '' : 's') + ', ' + h + ' homework week' + (h === 1 ? '' : 's') + '.');
       res.notes.forEach(function (n) { lines.push('   ' + n); });
     });
+
+    if (lockedSkips) lines.push('Weeks before the ' + lockBefore + ' week are locked, so only this week\u2019s quiz and homework numbers were updated.');
 
     var att = ss.getSheetByName(ATTENDANCE_NAME);
     if (att) {
@@ -187,7 +196,7 @@ function numOrNull_(s) {
 //   averaged over every student on the roster.
 // - Homework = "Homework" columns: a student counts as turned in for the week if any
 //   homework due that week has a score above 0. Blank cells don't count either way.
-// - A column where more than half the class is blank hasn't been graded yet and is skipped.
+// - A column is skipped only when it hasn't been graded at all (every student blank).
 // - Weeks run Monday to Sunday by due date. Classwork and everything else is ignored.
 function gradebookWeeks_(grid, className, skip) {
   var findRow = function (prefix) {
@@ -212,7 +221,7 @@ function gradebookWeeks_(grid, className, skip) {
     if (!wk || !(max > 0)) { notes.push('Skipped "' + name + '" (no due date or max points).'); continue; }
     var vals = students.map(function (r) { return String(r[i] === undefined ? '' : r[i]).trim(); });
     var blank = vals.filter(function (v) { return v === ''; }).length;
-    if (blank > students.length / 2) { notes.push('Skipped "' + name + '": not graded yet (' + blank + ' of ' + students.length + ' blank).'); continue; }
+    if (blank === students.length) { notes.push('Skipped "' + name + '": not graded yet (every cell blank).'); continue; }
     cols.push({ name: name, cat: cat, wk: wk, max: max, vals: vals });
   }
   var weeks = {};
