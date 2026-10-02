@@ -70,9 +70,12 @@ function loadAll() {
  * ------------------------------------------------------------ */
 
 var SKIP_NAME = 'Skip';
-// From this Monday on, an update only changes the current week's quiz and homework numbers;
-// every earlier week stays exactly as it was (locked). Attendance is never locked.
-var LOCK_FROM = '2026-10-05';
+// From the week ending on this Thursday on, an update only changes the current week's quiz and
+// homework numbers; every earlier week stays exactly as it was (locked). Attendance is never locked.
+var LOCK_FROM = '2026-10-08';
+
+// The app checks this to make sure it's talking to a script that uses Friday-Thursday weeks.
+function apiVersion() { return 2; }
 var ATTENDANCE_NAME = 'Attendance';
 
 function updateFromGradebooks() {
@@ -86,7 +89,7 @@ function updateFromGradebooks() {
     var classes = config.classes;
     var skip = readSkip_();
     var tabs = ss.getSheets();
-    var thisWeek = mondayOf_(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+    var thisWeek = weekOf_(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
     var lockBefore = thisWeek >= LOCK_FROM ? thisWeek : null;
     var lockedSkips = 0;
     var lines = [];
@@ -110,7 +113,7 @@ function updateFromGradebooks() {
       res.notes.forEach(function (n) { lines.push('   ' + n); });
     });
 
-    if (lockedSkips) lines.push('Weeks before the ' + lockBefore + ' week are locked, so only this week\u2019s quiz and homework numbers were updated.');
+    if (lockedSkips) lines.push('Weeks ending before Thursday ' + lockBefore + ' are locked, so only this week\u2019s quiz and homework numbers were updated.');
 
     var att = ss.getSheetByName(ATTENDANCE_NAME);
     if (att) {
@@ -170,8 +173,9 @@ function findClassTab_(tabs, name) {
   return null;
 }
 
-// Monday (YYYY-MM-DD) of the week holding a date written as 2026-09-21 or 9/21/2026.
-function mondayOf_(s) {
+// Competition weeks run Friday through Thursday and are named by the Thursday they end on.
+// Returns that Thursday (YYYY-MM-DD) for a date written as 2026-09-21 or 9/21/2026.
+function weekOf_(s) {
   s = String(s);
   var m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/), y, mo, d;
   if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
@@ -182,7 +186,7 @@ function mondayOf_(s) {
   }
   var t = new Date(Date.UTC(y, mo - 1, d));
   if (t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return null; // e.g. 13/45/2026
-  t.setUTCDate(t.getUTCDate() - (t.getUTCDay() + 6) % 7);
+  t.setUTCDate(t.getUTCDate() + (4 - t.getUTCDay() + 7) % 7);
   return t.getUTCFullYear() + '-' + ('0' + (t.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + t.getUTCDate()).slice(-2);
 }
 
@@ -197,7 +201,8 @@ function numOrNull_(s) {
 // - Homework = "Homework" columns: a student counts as turned in for the week if any
 //   homework due that week has a score above 0. Blank cells don't count either way.
 // - A column is skipped only when it hasn't been graded at all (every student blank).
-// - Weeks run Monday to Sunday by due date. Classwork and everything else is ignored.
+// - Weeks run Friday to Thursday by due date (a Friday quiz counts in the week it starts).
+//   Classwork and everything else is ignored.
 function gradebookWeeks_(grid, className, skip) {
   var findRow = function (prefix) {
     for (var r = 1; r < Math.min(grid.length, 20); r++) {
@@ -217,7 +222,7 @@ function gradebookWeeks_(grid, className, skip) {
     if (cat !== 'Homework' && cat !== 'Assessments') continue;
     var name = String(hdr[i]).trim();
     if (skip[norm_(className) + '|' + norm_(name)]) { notes.push('Skipped "' + name + '" (on the Skip tab).'); continue; }
-    var wk = mondayOf_(strip(grid[dueRow][i], 'Due:')), max = numOrNull_(strip(grid[maxRow][i], 'Max Points:'));
+    var wk = weekOf_(strip(grid[dueRow][i], 'Due:')), max = numOrNull_(strip(grid[maxRow][i], 'Max Points:'));
     if (!wk || !(max > 0)) { notes.push('Skipped "' + name + '" (no due date or max points).'); continue; }
     var vals = students.map(function (r) { return String(r[i] === undefined ? '' : r[i]).trim(); });
     var blank = vals.filter(function (v) { return v === ''; }).length;
@@ -275,7 +280,7 @@ function attendanceWeeks_(grid, classes) {
   var weeks = {}, notes = [], badDate = 0, unknown = {};
   grid.slice(1).forEach(function (r) {
     if (!r.join('').trim()) return;
-    var wk = mondayOf_(r[dateC]);
+    var wk = weekOf_(r[dateC]);
     if (!wk) { badDate++; return; }
     var cls = matchClass_(r[classC], classes);
     if (!cls) { unknown[String(r[classC]).trim() || '(blank)'] = true; return; }

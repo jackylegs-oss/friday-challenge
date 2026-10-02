@@ -284,10 +284,11 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-10-01c";
+const APP_VERSION = "2026-10-01d";
 // Growth compares each class with its own most recent earlier week that has a number (week over week).
 const GROWTH_WEEKS = 1;
-const DAYS = ["M","T","W","Th","F"];
+// Competition weeks run Friday through Thursday (results are final Thursday; awards go out Friday).
+const DAYS = ["F","M","T","W","Th"];
 // A class at one of these levels can't really improve, so holding it earns full credit (GROWTH.perfect).
 const PERFECT = {
   hw: v=>v>=95,
@@ -296,14 +297,16 @@ const PERFECT = {
   tardy: v=>v<=0
 };
 
-function mondayOf(d){
+// A week is named by the Thursday it ends on: Friday through Thursday.
+function weekEndOf(d){
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const dow = (x.getDay()+6)%7; x.setDate(x.getDate()-dow); return x;
+  x.setDate(x.getDate() + (4 - x.getDay() + 7) % 7); return x;
 }
 function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function parseIso(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
-function addWeeks(s,n){ const d=parseIso(s); d.setDate(d.getDate()+7*n); return iso(d); }
-function fmtWeek(s){ const d=parseIso(s); return "Week of "+d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
+function addDays(s,n){ const d=parseIso(s); d.setDate(d.getDate()+n); return iso(d); }
+function addWeeks(s,n){ return addDays(s,7*n); }
+function fmtWeek(s){ const d=parseIso(s); return "Week ending Thu "+d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
 
 const DEFAULT_CONFIG = {
   classes:[
@@ -320,9 +323,51 @@ const DEFAULT_CONFIG = {
 
 let config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 let weeks = {};        // weekId -> {entries:{cid:{...}}}
-let current = iso(mondayOf(new Date()));
+let current = iso(weekEndOf(new Date()));
 let db = null;
 let readOnly = false;
+
+/* ---------- week format ----------
+   Weeks used to run Monday-Friday and be saved under their Monday. They now run Friday-Thursday and are
+   saved under their Thursday. Old weeks are moved once: everything entered for a Monday week goes to the
+   Thursday of that week (Mon-Thu), and a Friday behavior tap moves to the start of the next week. */
+const WEEK_MODE = "fri-thu";
+const isThursday = id=>parseIso(id).getDay()===4;
+function migrateWeeks(src){
+  const out = {};
+  const get = id=>out[id] || (out[id] = {entries:{}});
+  const blank = ()=>[null,null,null,null,null];
+  Object.keys(src||{}).filter(id=>/^\d{4}-\d{2}-\d{2}$/.test(id)).sort().forEach(id=>{
+    const w = src[id] || {}, dow = parseIso(id).getDay();
+    if(dow!==4 && dow!==1) return;
+    const thu = dow===4 ? id : addDays(id,3), t = get(thu);
+    Object.keys(w).forEach(k=>{ if(k!=="entries" && t[k]===undefined) t[k] = w[k]; });
+    Object.keys(w.entries||{}).forEach(cid=>{
+      const e = w.entries[cid] || {}, te = t.entries[cid] = Object.assign({}, t.entries[cid]||{});
+      Object.keys(e).forEach(k=>{ if(k!=="days") te[k] = e[k]; });
+      if(!e.days) return;
+      if(dow===4){ te.days = e.days.slice(); return; }
+      const d = (te.days||blank()).slice(); for(let i=0;i<4;i++) d[i+1] = e.days[i]===undefined ? null : e.days[i]; te.days = d;
+      if(e.days[4]){
+        const n = get(addWeeks(thu,1)), ne = n.entries[cid] = Object.assign({}, n.entries[cid]||{});
+        const nd = (ne.days||blank()).slice(); nd[0] = e.days[4]; ne.days = nd;
+      }
+    });
+  });
+  return out;
+}
+function normalizeConfigDates(cfg){
+  const fix = s=>s ? iso(weekEndOf(parseIso(s))) : s;
+  if(cfg.season) cfg.season.start = fix(cfg.season.start);
+  (cfg.pastSeasons||[]).forEach(p=>p.start = fix(p.start));
+  (cfg.classes||[]).forEach(c=>{ (c.sizeChanges||[]).forEach(x=>x.from = fix(x.from)); (c.restarts||[]).forEach(x=>x.from = fix(x.from)); });
+}
+// Returns true when it just converted old Monday weeks (they need saving).
+function upgradeWeeks(){
+  if(config.weekMode===WEEK_MODE){ Object.keys(weeks).forEach(id=>{ if(!isThursday(id)) delete weeks[id]; }); return false; }
+  weeks = migrateWeeks(weeks); normalizeConfigDates(config); config.weekMode = WEEK_MODE;
+  return true;
+}
 
 /* ---------- storage ---------- */
 function localLoad(){
@@ -330,6 +375,7 @@ function localLoad(){
     const c = localStorage.getItem("fc-config"); if(c) config = JSON.parse(c);
     const w = localStorage.getItem("fc-weeks"); if(w) weeks = JSON.parse(w);
   }catch(e){}
+  if(upgradeWeeks()) localSave();
 }
 function localSave(){
   try{ localStorage.setItem("fc-config",JSON.stringify(config)); localStorage.setItem("fc-weeks",JSON.stringify(weeks)); }catch(e){}
@@ -377,7 +423,7 @@ const comp = ()=>config.classes.filter(c=>!c.iep);
 function weightsFor(cid){ return (config.classWeights && config.classWeights[cid]) || config.weights; }
 function wOf(cid, key){ return Number(weightsFor(cid)[key])||0; }
 function hasOwnWeights(cid){ return !!(config.classWeights && config.classWeights[cid]); }
-const thisMonday = ()=>iso(mondayOf(new Date()));
+const thisWeek = ()=>iso(weekEndOf(new Date()));
 // Class size can change mid-year; a change "from this week on" leaves earlier weeks' math alone.
 function sizeFor(cls, wk){
   let sz = Number(cls.size)||1;
@@ -445,7 +491,7 @@ function streakInfo(wk, cls){
     before = level;
     const st = weekBehavior(w, cls.id);
     if(st==="perfect") level = Math.min(level+1, STREAK.cap);
-    else if(st==="broken" || (st==="partial" && w<thisMonday())) level = Math.max(level-1, 0);
+    else if(st==="broken" || (st==="partial" && w<thisWeek())) level = Math.max(level-1, 0);
   });
   const state = weekBehavior(wk, cls.id);
   if(!weeks[wk]) before = level;
@@ -474,7 +520,7 @@ function streakText(wk, cls){
   const s = streakInfo(wk, cls), ds = dayStreak(wk, cls), parts = [];
   parts.push(ds ? "\u{1F525} "+ds+" day"+(ds===1?"":"s")+" in a row" : "No behavior streak yet");
   if(s.state==="perfect") parts.push("Perfect week: points \u00d7"+s.mult.toFixed(2));
-  else if(s.state==="partial" && wk>=thisMonday()) parts.push("Perfect so far. Finish the week for \u00d7"+s.next.toFixed(2));
+  else if(s.state==="partial" && wk>=thisWeek()) parts.push("Perfect so far. Finish the week for \u00d7"+s.next.toFixed(2));
   else if(s.state==="broken") parts.push(s.before ? (s.level ? "Streak dropped to level "+s.level : "Streak reset") : "Next perfect week: ×"+s.next.toFixed(2));
   else parts.push("Next perfect week: \u00d7"+s.next.toFixed(2));
   return parts.join(" \u00b7 ");
@@ -592,7 +638,7 @@ function sortedStandings(){
 }
 
 function renderHeader(){
-  document.getElementById("wkLabel").replaceChildren(fmtWeek(current), el("small",{text: current===iso(mondayOf(new Date())) ? "This week" : (current>iso(mondayOf(new Date()))?"Upcoming":"Past week")}));
+  document.getElementById("wkLabel").replaceChildren(fmtWeek(current), el("small",{text: current===thisWeek() ? "This week" : (current>thisWeek()?"Upcoming":"Past week")}));
   document.getElementById("seasonLine").textContent = "Mr. Johnson's classes, " + (seasonFor(current).pre ? "Preseason" : seasonFor(current).name + " season");
 }
 
@@ -791,7 +837,9 @@ function importData(d){
   if(!d || typeof d!=="object" || (!d.weeks && !d.config)) throw new Error("bad file");
   let n = 0; const ids = [];
   const newConfig = d.config && Array.isArray(d.config.classes);
-  if(newConfig) config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config);
+  const oldFormat = !(d.config && d.config.weekMode===WEEK_MODE);
+  if(newConfig){ config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config); if(oldFormat) normalizeConfigDates(config); config.weekMode = WEEK_MODE; }
+  if(oldFormat) d = Object.assign({}, d, {weeks: migrateWeeks(d.weeks)});
   Object.keys(d.weeks||{}).forEach(id=>{
     if(!/^\d{4}-\d{2}-\d{2}$/.test(id)) return;
     const inc = d.weeks[id]||{}; const cur = weeks[id] || {entries:{}};
@@ -814,7 +862,7 @@ function renderSettings(){
     config.classes.map(c=>{
       const name = el("input",Object.assign({type:"text", value:c.name, "aria-label":"Class name"},dis));
       name.addEventListener("change",()=>{ c.name = name.value.trim()||c.name; saveConfig(); render(); });
-      const nowSize = sizeFor(c, thisMonday());
+      const nowSize = sizeFor(c, thisWeek());
       const size = el("input",Object.assign({type:"number", min:"1", value:nowSize, "aria-label":"Number of students"},dis));
       const choice = el("div",{class:"sizechoice", hidden:""});
       const applyAll = el("button",{class:"btn",type:"button",text:"Fix it for every week"});
@@ -824,7 +872,7 @@ function renderSettings(){
       const val = ()=>Math.max(1, Math.round(Number(size.value)||1));
       size.addEventListener("input",()=>{ choice.hidden = (val()===nowSize); });
       applyAll.addEventListener("click",()=>{ c.size = val(); c.sizeChanges = []; saveConfig(); render(); });
-      applyFwd.addEventListener("click",()=>{ const wk=thisMonday(); c.sizeChanges = (c.sizeChanges||[]).filter(x=>x.from!==wk).concat([{from:wk, size:val()}]); saveConfig(); render(); });
+      applyFwd.addEventListener("click",()=>{ const wk=thisWeek(); c.sizeChanges = (c.sizeChanges||[]).filter(x=>x.from!==wk).concat([{from:wk, size:val()}]); saveConfig(); render(); });
       cancel.addEventListener("click",()=>{ size.value = nowSize; choice.hidden = true; });
       const iep = el("input",Object.assign({type:"checkbox", "aria-label":"Compete against own past weeks"},dis)); iep.checked = !!c.iep;
       iep.addEventListener("change",()=>{ c.iep = iep.checked; saveConfig(); render(); });
@@ -834,7 +882,7 @@ function renderSettings(){
         if(!confirm(c.name+"'s quizzes changed format the "+fmtWeek(current).replace("Week","week")+"?\n\nThat week counts as their first week on the new format (no quiz growth), and from the next quiz on they're compared with the new format only.")) return;
         c.restarts = (c.restarts||[]).filter(r=>!(r.key==="quiz" && r.from===current)).concat([{key:"quiz", from:current}]); saveConfig(); render();
       });
-      const fmtInfo = el("div",{class:"fmtline"}, rq.length ? "Quiz comparison restarted: "+rq.map(f=>fmtWeek(f).replace("Week of ","")).join(", ")+" " : null,
+      const fmtInfo = el("div",{class:"fmtline"}, rq.length ? "Quiz comparison restarted: "+rq.map(f=>fmtWeek(f).replace("Week ending ","")).join(", ")+" " : null,
         rq.length ? (()=>{ const u = el("button",Object.assign({class:"linkbtn",type:"button",text:"Undo latest"},dis)); u.addEventListener("click",()=>{ const last = rq[rq.length-1]; c.restarts = (c.restarts||[]).filter(r=>!(r.key==="quiz" && r.from===last)); saveConfig(); render(); }); return u; })() : null,
         rq.length ? " \u00b7 " : null, fmtBtn);
       return el("div",null, el("div",{class:"crow"}, name, size, el("label",null, iep)), fmtInfo, choice);
@@ -885,12 +933,12 @@ function renderSettings(){
   const sName = el("input",Object.assign({type:"text", value:config.season.name, "aria-label":"Season name"},dis));
   sName.addEventListener("change",()=>{ config.season.name = sName.value.trim()||config.season.name; saveConfig(); render(); });
   const sStart = el("input",Object.assign({type:"date", value:config.season.start, "aria-label":"Season start"},dis));
-  sStart.addEventListener("change",()=>{ if(sStart.value){ config.season.start = iso(mondayOf(parseIso(sStart.value))); saveConfig(); render(); } });
+  sStart.addEventListener("change",()=>{ if(sStart.value){ config.season.start = iso(weekEndOf(parseIso(sStart.value))); saveConfig(); render(); } });
   const newName = el("input",Object.assign({type:"text", placeholder:"Next season name, e.g. Quarter 2", "aria-label":"New season name"},dis));
   const startBtn = el("button",Object.assign({class:"btn", type:"button", text:"Start new season this week"},dis));
   startBtn.addEventListener("click",()=>{
     const nm = newName.value.trim(); if(!nm){ newName.focus(); return; }
-    const start = thisMonday();
+    const start = thisWeek();
     if(start<=config.season.start){ newName.value=""; newName.placeholder="This season only just started"; return; }
     if(!confirm("End "+config.season.name+" now and start "+nm+" on the "+fmtWeek(start).replace("Week","week")+"?\n\n"+config.season.name+"'s champion gets recorded and the standings reset to zero. To just change when the current season starts, cancel and use the date box above instead.")) return;
     const totals = seasonTotals(addWeeks(start,-1)); const champ = comp().slice().sort((a,b)=>totals[b.id]-totals[a.id])[0];
@@ -900,7 +948,7 @@ function renderSettings(){
     saveConfig(); render();
   });
   const past = (config.pastSeasons||[]).map((p,idx)=>{
-    const li = el("li",null, p.name+(p.champion?": won by "+p.champion:"")+" (started "+fmtWeek(p.start).replace("Week of ","")+") ");
+    const li = el("li",null, p.name+(p.champion?": won by "+p.champion:"")+" (began the "+fmtWeek(p.start).replace("Week","week")+") ");
     if(!readOnly){
       const rm = el("button",{class:"linkbtn",type:"button",text:"Remove"});
       rm.addEventListener("click",()=>{
@@ -913,7 +961,7 @@ function renderSettings(){
   });
   const season = el("div",{class:"panel"}, el("h3",{text:"Season"}),
     el("div",{class:"crow",style:"grid-template-columns:1fr 1fr"}, sName, sStart),
-    el("p",{class:"muted",text:"Standings add up every week of the season through the week you're viewing, and past seasons stay viewable with the week arrows. Starting a new season records this season's champion and resets the board; weekly numbers stay saved."}),
+    el("p",{class:"muted",text:"Weeks run Friday through Thursday and are named by the Thursday they end. Standings add up every week of the season through the week you're viewing, and past seasons stay viewable with the week arrows. Starting a new season records this season's champion and resets the board; weekly numbers stay saved."}),
     el("div",{class:"crow",style:"grid-template-columns:1fr auto"}, newName, startBtn),
     past.length? el("div",null, el("p",{class:"muted",text:"Past seasons"}), el("ul",null,past)) : null
   );
@@ -935,14 +983,15 @@ function renderSettings(){
     el("div",{class:"ctrls"}, dl, up, file), msg);
   const sheetPanel = db ? el("div",{class:"panel"}, el("h3",{text:"Update from your Google Sheet"}),
     el("p",{class:"muted",text:"Import each class's gradebook (Student Task Scores CSV) into your Friday Challenge spreadsheet as its own tab, named exactly like the class here (“Period 2”). For absences and tardies, add a tab named “Attendance”. Then click Update. The math happens inside Google and only class averages come back to the app, so student names never leave your spreadsheet."}),
-    el("div",{class:"ctrls"}, (()=>{ const b = el("button",{class:"btn primary",type:"button",text: sheetBusy ? "Updating…" : "Update scores from Sheet"}); if(sheetBusy || readOnly) b.disabled = true; b.addEventListener("click", updateFromSheet); return b; })()),
+    serverApi!==null && serverApi<2 ? el("p",{class:"warnnote",text:"Your Google script is an older version that still uses Monday weeks. Paste the new Code.gs into Apps Script and deploy a new version (Deploy \u2192 Manage deployments \u2192 Edit \u2192 New version) before updating."}) : null,
+    el("div",{class:"ctrls"}, (()=>{ const b = el("button",{class:"btn primary",type:"button",text: sheetBusy ? "Updating…" : "Update scores from Sheet"}); if(sheetBusy || readOnly || serverApi===null || serverApi<2) b.disabled = true; b.addEventListener("click", updateFromSheet); return b; })()),
     sheetMsg.length ? el("ul",{class:"sheetmsg"}, sheetMsg.map(t=>el("li",{text:t}))) : null
   ) : null;
   root.append(el("div",{class:"set"}, classes, weights, season, sheetPanel, backup));
   root.append(el("p",{class:"muted",text:"App version "+APP_VERSION+(db ? " · Connected to Google Sheets" : " · Browser-only copy (open the Google link to sync)")}));
 }
 
-let sheetMsg = [], sheetBusy = false;
+let sheetMsg = [], sheetBusy = false, serverApi = null;
 // Waits for any unsaved edits, has the Google script rebuild quiz, homework, absence, and tardy
 // numbers from the Sheet's gradebook and Attendance tabs, then reloads everything.
 async function updateFromSheet(){
@@ -965,7 +1014,7 @@ async function updateFromSheet(){
 
 let weightTarget = "default";
 const chart = {metric:"quiz", cls:"all", others:false, view:"standings"};
-function shortWeek(w){ const d=parseIso(w); return "Wk of "+d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
+function shortWeek(w){ const d=parseIso(w); return "Wk ending "+d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
 function seriesData(metric){
   const field = metric==="quiz" ? "quiz" : "hw";
   // Every week up to the one being viewed, across seasons, so classes always see their whole history.
@@ -1052,7 +1101,7 @@ function behaviorBoard(){
     const groups = el("div",{class:"wkgroups"}, wks.map(w=>{
       const d = entry(w,c.id).days||[], box = el("span",{class:"dots"});
       DAYS.forEach((lbl,i)=>{ const v=d[i]||""; box.append(el("i",{class:v,title:fmtWeek(w)+", "+lbl+": "+(v==="y"?"earned":v==="n"?"missed":v==="x"?"no school":"not marked")})); });
-      return el("div",{class:"wkg"}, el("small",{text:shortWeek(w).replace("Wk of ","")}), box);
+      return el("div",{class:"wkg"}, el("small",{text:"Ends "+shortWeek(w).replace("Wk ending ","")}), box);
     }));
     const s = streakInfo(current,c), ds = dayStreak(current,c);
     return el("div",{class:"brow"},
@@ -1177,7 +1226,9 @@ function loadServer(first){
     const d = JSON.parse(txt||"{}");
     config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config||{});
     weeks = d.weeks || {};
+    const moved = upgradeWeeks();
     readOnly = false; setStatus("Saved to Google"); render();
+    if(moved){ saveConfig(); Object.keys(weeks).forEach(saveWeek); }
   }).withFailureHandler(err=>{ if(first) setStatus("Couldn't load your scores from Google ("+String(err && err.message || err)+"). Reload the page."); }).loadAll();
 }
 if(gsRun()){
@@ -1188,6 +1239,7 @@ if(gsRun()){
   // Nothing is editable until the Sheet's data arrives, so an empty screen can't overwrite it.
   readOnly = true; render(); setStatus("Loading…");
   loadServer(true);
+  gsRun().withSuccessHandler(v=>{ serverApi = Number(v)||1; renderSettings(); }).withFailureHandler(()=>{ serverApi = 1; renderSettings(); }).apiVersion();
   // Pick up changes made on another computer when coming back to this tab.
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && !readOnly) loadServer(false); });
 } else {
