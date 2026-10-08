@@ -24,6 +24,7 @@ Test Google mode locally by stubbing `SpreadsheetApp`/`LockService`/`google.scri
 ## Data
 
 - In the plain version, everything is saved in the browser's `localStorage` under `fc-config` (classes, weights, seasons) and `fc-weeks` (week ID `YYYY-MM-DD` of the Monday → `{entries: {classId: {...}}, quizName, hwName}`). `fc-lastBackup` stores the last backup date.
+- A file with `"replace": true` replaces each listed week wholesale instead of merging (used for repair files).
 - Settings → Backup downloads `friday-challenge-backup-YYYY-MM-DD.json`. Restore/import: a file with `config` replaces settings; `weeks` are merged field by field into existing weeks.
 - The standings page nudges a backup if none has been made in 7 days.
 - Imports also queue a save of every imported week (and config, for full backups) when running in Google mode.

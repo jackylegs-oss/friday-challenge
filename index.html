@@ -284,7 +284,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-10-01d";
+const APP_VERSION = "2026-10-08a";
 // Growth compares each class with its own most recent earlier week that has a number (week over week).
 const GROWTH_WEEKS = 1;
 // Competition weeks run Friday through Thursday (results are final Thursday; awards go out Friday).
@@ -842,7 +842,8 @@ function importData(d){
   if(oldFormat) d = Object.assign({}, d, {weeks: migrateWeeks(d.weeks)});
   Object.keys(d.weeks||{}).forEach(id=>{
     if(!/^\d{4}-\d{2}-\d{2}$/.test(id)) return;
-    const inc = d.weeks[id]||{}; const cur = weeks[id] || {entries:{}};
+    // A repair file ("replace": true) swaps whole weeks instead of merging into them.
+    const inc = d.weeks[id]||{}; const cur = (d.replace===true || !weeks[id]) ? {entries:{}} : weeks[id];
     Object.keys(inc).forEach(k=>{ if(k!=="entries") cur[k]=inc[k]; });
     cur.entries = cur.entries || {};
     Object.keys(inc.entries||{}).forEach(cid=>{ cur.entries[cid] = Object.assign({}, cur.entries[cid]||{}, inc.entries[cid]); });
@@ -850,7 +851,7 @@ function importData(d){
   });
   localSave();
   if(db){ if(newConfig) saveConfig(); ids.forEach(saveWeek); }
-  return (d.config ? "Restored settings and " : "Imported ")+n+" week"+(n===1?"":"s")+" of scores.";
+  return (d.config ? "Restored settings and " : d.replace===true ? "Replaced " : "Imported ")+n+" week"+(n===1?"":"s")+" of scores.";
 }
 
 function renderSettings(){
@@ -1021,10 +1022,12 @@ function seriesData(metric){
   const wks = Object.keys(weeks).filter(w=>w<=current).sort()
     .filter(w=>config.classes.some(c=>num(entry(w,c.id)[field])!==null));
   const labels = wks.map(w=>(weeks[w] && weeks[w][metric+"Name"]) || shortWeek(w));
+  const names = wks.map(w=>(weeks[w] && weeks[w][metric+"Name"]) || "");
+  const dates = wks.map(w=>"Ends "+parseIso(w).toLocaleDateString(undefined,{month:"short",day:"numeric"}));
   const series = config.classes.map(c=>({c, vals: wks.map(w=> metric==="quiz" ? quizAvg(w,c) : num(entry(w,c.id)[field]))}));
   // A dashed line where each season starts.
   const starts = allSeasons().map(s=>({name:s.name, idx: wks.findIndex(w=>w>=s.start)})).filter(s=>s.idx>0);
-  return {wks, labels, series, starts};
+  return {wks, labels, names, dates, series, starts};
 }
 function changeFor(data, cid){
   const s = data.series.find(x=>x.c.id===cid); if(!s) return null;
@@ -1060,10 +1063,23 @@ function drawChart(data, big){
     svg.append(sv("line",{x1:P.l,x2:W-P.r,y1:y(t),y2:y(t),stroke:"var(--c-grid)","stroke-width":1}));
     svg.append(sv("text",{x:P.l-10,y:y(t)+fs*0.35,"text-anchor":"end","font-size":fs,fill:"var(--c-text)","font-family":"Barlow Condensed, Arial Narrow, sans-serif"},t+"%"));
   }
-  const every = n>8 ? Math.ceil(n/8) : 1;
-  data.labels.forEach((lb,i)=>{ if(i%every && i!==n-1) return;
-    const txt = lb.length>20 ? lb.slice(0,19)+"…" : lb;
-    svg.append(sv("text",{x:x(i),y:H-P.b+fs*1.8,"text-anchor":(n>1&&i===0)?"start":(n>1&&i===n-1)?"end":"middle","font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif"},txt)); });
+  // Two-line axis labels (assignment name over the week's end date), centered under each point and
+  // shortened to fit the space between points so neighbors never overlap.
+  const slot = n>1 ? (pw-2*gx)/(n-1) : pw;
+  const every = Math.max(1, Math.ceil(fs*7/slot));
+  const room = Math.min(slot*every, n>1 ? slot*every : pw) - 8;
+  const maxCh = Math.max(5, Math.floor(room/(fs*0.52)));
+  const cut = t=>t.length>maxCh ? t.slice(0,maxCh-1).trimEnd()+"\u2026" : t;
+  for(let i=0;i<n;i++){
+    if(i%every && i!==n-1) continue;
+    if(i!==n-1 && n-1-i < every && (n-1)%every) continue; // keep the last label clear of its neighbor
+    const name = data.names[i], date = data.dates[i];
+    const g = sv("text",{x:x(i),y:H-P.b+fs*1.7,"text-anchor":"middle","font-size":fs,fill:"var(--c-text)","font-family":"Barlow, sans-serif"});
+    g.append(sv("tspan",{x:x(i)}, cut(name || date)));
+    if(name) g.append(sv("tspan",{x:x(i),dy:fs*1.2,"font-size":fs*0.85,opacity:".75"}, date));
+    g.append(sv("title",{}, name ? name+" ("+date+")" : date));
+    svg.append(g);
+  }
   data.starts.forEach(s=>{
     const sx = (x(s.idx-1)+x(s.idx))/2;
     svg.append(sv("line",{x1:sx,x2:sx,y1:P.t,y2:P.t+ph,stroke:"var(--c-text)","stroke-width":1.5,"stroke-dasharray":"5 5"}));
