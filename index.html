@@ -284,7 +284,7 @@ const CATS = [
   {key:"attendance", label:"Attendance", short:"Attendance", dir:-1},
   {key:"tardy", label:"Tardies", short:"Tardies", dir:-1}
 ];
-const APP_VERSION = "2026-10-08a";
+const APP_VERSION = "2026-10-08b";
 // Growth compares each class with its own most recent earlier week that has a number (week over week).
 const GROWTH_WEEKS = 1;
 // Competition weeks run Friday through Thursday (results are final Thursday; awards go out Friday).
@@ -530,8 +530,9 @@ function streakText(wk, cls){
    Every class is scored only on its own numbers. For each category:
      growth points = (this week - its own previous week) x scale, flipped for absences and tardies.
    The scales put every category in roughly "percentage points of the class":
-     quiz %, homework %, and % of behavior days earned count 1 point per point;
-     unexcused absences and tardies count 1 point per 1% of the class (one fewer tardy in a class of 25 = +4);
+     quiz % and homework % count 1 point per percentage point;
+     behavior counts 1 point per 4% of days earned (one more earned day out of five = +5);
+     unexcused absences and tardies count 1 point per 2% of the class (one fewer tardy in a class of 25 = +2);
      house points count 10 points per extra house point per student.
    Holding a perfect level (95%+ homework, every behavior day earned, 0 absences, 0 tardies) earns at
    least GROWTH.perfect points, even without an earlier week. A category with no earlier week and no
@@ -539,8 +540,8 @@ function streakText(wk, cls){
    count, and a perfect behavior week multiplies a positive score by the streak multiplier.
    Whoever has the highest weekly score improved the most and wins the week. */
 // cap: no single category can move a class's score more than 15 points either way in one week.
-// perfect: holding a perfect level always earns the full cap, so a perfect week can't be outscored.
-const GROWTH = {scale:{quiz:1, hw:1, behavior:100, house:10, attendance:100, tardy:100}, perfect:15, cap:15};
+// perfect: holding a perfect level earns +5 (smaller than the cap, so perfect weeks don't create huge gaps).
+const GROWTH = {scale:{quiz:1, hw:1, behavior:25, house:10, attendance:50, tardy:50}, perfect:5, cap:15};
 function catGrowth(wk, cls, cat){
   const v = metric(wk, cls, cat.key);
   if(v===null) return null;
@@ -688,7 +689,7 @@ function renderStandings(){
   root.append(el("p",{class:"note", text: waiting.length
     ? "This week so far. Still waiting on: "+waiting.join("; ")+"."
     : "All categories are in for this week."}));
-  root.append(el("p",{class:"note",text:"Each class is scored only against itself: every category compares this week with that class's own previous week (for quizzes, its last quiz), so changing one class's numbers never changes another class's score. The class that improved the most wins the week. Holding a perfect level (95%+ homework, every behavior day earned, no unexcused absences, or no tardies) earns the maximum, +15. Hover a chip to see this week's and last week's numbers."}));
+  root.append(el("p",{class:"note",text:"Each class is scored only against itself: every category compares this week with that class's own previous week (for quizzes, its last quiz), so changing one class's numbers never changes another class's score. The class that improved the most wins the week. Holding a perfect level (95%+ homework, every behavior day earned, no unexcused absences, or no tardies) earns +5. Hover a chip to see this week's and last week's numbers."}));
 
   iepClasses().forEach(cls=>{
     const r = iepWeek(current, cls);
